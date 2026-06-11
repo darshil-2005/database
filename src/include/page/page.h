@@ -76,17 +76,29 @@ struct InternalPageHeader {
 
 struct SlotArrayElement {
   Offset offset;
-  TupleLength length;
+  uint16_t length;
   // Not clear if we really need this right now since we run compact after every delete
-  Byte is_deleted;
+  // Byte is_deleted;
 };
 
-class TablePage {
-  TablePageHeader page_meta;
-  Byte table_page_data[TABLE_PAGE_DATA_SIZE];
+class LeafPage {
+  LeafPageHeader leaf_page_meta;
+  // SlotArrayElement* slot_array;
+  // data : slot array | free space | tuples
+  Byte* data;
+
   Result<SlotID, TupleInsertErr> InsertTuple();
   Result<DeleteStatus, TupleDeleteErr> DeleteTuple();
   Result<Tuple, TupleGetErr> GetTuple();
+};
+
+class InternalPage {
+  // 7 bytes
+  InternalPageHeader internal_page_meta;
+  // 4089 bytes for the keys and values
+  // n = 2044
+  // So there are 1021 key slots and 1022 pointer slots; 
+  Byte* data;
 };
 
 

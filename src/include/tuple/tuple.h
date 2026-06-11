@@ -33,5 +33,5 @@ class Tuple {
    */
   Byte* column_offsets;
   Byte* data;
-  size_t getBitmapSize() const;
+  size_t getBitmapSize(uint_t attribute_count) const;
 };
