@@ -26,15 +26,17 @@ Result<OffsetIndex> BufferPool::FindPageToEvict() {
 
   size_t MAX_ITERS = 2 * unpinned_frames.size();
   for (int i=0; i<MAX_ITERS; i++) {
-    ssize_t index = unpinned_frames.front();
+    index = unpinned_frames.front();
     unpinned_frames.pop();
     BufferFrameMeta& frame_meta = buffer_pool_meta[index];
-    if (frame.reference_bit == 1) {
+    if (frame_meta.pin_count > 0) {
+      continue;
+    };
+    if (frame_meta.reference_bit == 1) {
       frame_meta.reference_bit = 0;
       unpinned_frames.push(index);
       continue;
     };
-    index = i;
     break;
   };
 
@@ -45,7 +47,7 @@ Result<OffsetIndex> BufferPool::FindPageToEvict() {
 };
 
 
-Result<OffsetIndex> EvictPage(OffsetIndex index) {
+Result<OffsetIndex> BufferPool::EvictPage(OffsetIndex index) {
   BufferFrameMeta& frame_meta = buffer_pool_meta[index];
 
   // Might add functionality for trying again instead of crashing
@@ -79,7 +81,7 @@ Result<OffsetIndex> BufferPool::CheckFreeSpace() {
   return { .value = index, .err = ErrType::None };
 };
 
-Result<Byte*> BufferPool::RequestPage(PageId pid) {
+Result<Byte*> BufferPool::RequestPage(PageID pid) {
   ssize_t index = -1;
   if (page_table.count(pid)) {
     index = page_table[pid];
@@ -108,6 +110,8 @@ Result<Byte*> BufferPool::RequestPage(PageId pid) {
     index = evicted_index.value;
   } else {
     index = free_space.value;
+    // Probably bad design for multi threaded architecture but fine for my implementation.
+    free_frames.pop_back();
   };
 
   Offset offset = PAGE_SIZE * index;
@@ -122,6 +126,7 @@ Result<Byte*> BufferPool::RequestPage(PageId pid) {
   buffer_pool_meta[index].page_id = pid;
   buffer_pool_meta[index].is_dirty = false;
   buffer_pool_meta[index].reference_bit = 1;
+  page_table[pid] = index;
 
   return { .value = buffer_pool + offset, .err = ErrType::None };
 };
@@ -133,7 +138,7 @@ Result<bool> ReleasePage(PageID pid, bool is_dirty) {
   };
 
   OffsetIndex index = page_table[pid];
-  BufferFrameMeta frame_meta = buffer_pool_meta[index];
+  BufferFrameMeta& frame_meta = buffer_pool_meta[index];
   frame_meta.pin_count--;
   if (frame_meta.pin_count == 0) {
     unpinned_frames.push_back(index);
@@ -141,3 +146,4 @@ Result<bool> ReleasePage(PageID pid, bool is_dirty) {
   frame_meta[index].is_dirty = true;
   return { .val = true, .err = ErrType::None };
 };
+

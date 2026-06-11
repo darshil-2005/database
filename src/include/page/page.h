@@ -26,6 +26,16 @@
 //
 // Buffer Pool
 // Page Table tells us about what page is where in buffer pool.
+//
+// Decided on the clustered database implementation.
+// So the BTree will have 2 types of pages:
+//     1) Leaf Pages/Nodes containing the actual data
+//     2) Internal Pages/Nodes for traversing the BTree.
+// 
+//
+//
+//
+//
 
 struct PageHeader {
   // page type
@@ -34,7 +44,7 @@ struct PageHeader {
   PageID page_id;
 };
 
-struct TablePageHeader {
+struct LeafPageHeader {
   // page type
   PageType page_type;
   // page id
@@ -44,8 +54,24 @@ struct TablePageHeader {
   // free space end
   Offset free_space_end_offset;
   // slot array size
-  SlotLength slot_array_size;
-  // checksum?
+  uint16_t slot_array_size;
+  // sibling prev pageid
+  PageID prev_pid;
+  // sibling next pageid
+  PageID next_pid;
+  // parent pageid
+  PageID parent_pid;
+};
+
+struct InternalPageHeader {
+  // page type
+  PageType page_type;
+  // page id
+  PageID page_id;
+  // slot array size
+  uint16_t num_keys;
+  // parent pageid
+  PageID parent_pid;
 };
 
 struct SlotArrayElement {

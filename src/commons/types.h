@@ -18,6 +18,11 @@ using BitmapSize = uint16_t;
 using OperationStatus = bool;
 using Bool = uint8_t;
 
+struct RecordID {
+  PageID pid;
+  OffsetIndex slot_index;
+};
+
 enum ErrType {
 
   None,
@@ -40,7 +45,6 @@ enum class PageType : uint8_t {
     Meta = 1,
     BPlusInternal = 2,
     BPlusLeaf = 3,
-    Table = 4
 };
 
 template <typename T>
