@@ -61,11 +61,11 @@ struct LeafPageHeader {
   PageID parent_pid;
 };
 
-constexpr INTERNAL_PAGE_HEADER_SIZE = 7;
-constexpr NUM_KEY_SLOTS = 1021;
-constexpr NUM_CHILD_PAGEID_SLOTS = 1022;
-constexpr KEY_SIZE = 2;
-constexpr CHILD_PTR_SIZE = 2;
+constexpr uint16_t INTERNAL_PAGE_HEADER_SIZE = 7;
+constexpr uint16_t NUM_KEY_SLOTS = 1021;
+constexpr uint16_t NUM_CHILD_PAGEID_SLOTS = 1022;
+constexpr uint16_t KEY_SIZE = 2;
+constexpr uint16_t CHILD_PTR_SIZE = 2;
 
 struct InternalPageHeader {
   // page type

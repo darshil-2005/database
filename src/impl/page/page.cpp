@@ -4,7 +4,7 @@
 #include <../../commons/types.h>
 
 
-Bool CheckSlotAvailable(Byte* page, uint16_t key_size) {
+Bool InternalPage::CheckSlotAvailable(Byte* page, uint16_t key_size) {
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
   if (page_header->num_keys < NUM_KEY_SLOTS) {
     return 1;
@@ -38,7 +38,7 @@ PageID InternalPage::GetChildPageID(Byte* page, uint16_t key) {
   return GetValueAtIndex(page, index_child_ptr);
 };
 
-// inserts another key inside the internal page at appropriate location and its corresponding child pid at the proper location.
+// ALERT: This will overwrite the child pointers if you enter more keys than capacity.
 Bool InternalPage::InsertKeyValue(Byte* page, Key boundary_key, PageID new_pid) {
     
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
@@ -69,13 +69,13 @@ Bool InternalPage::InsertKeyValue(Byte* page, Key boundary_key, PageID new_pid) 
 uint16_t InternalPage::HandleSplit(Byte* old_page, Byte* new_page, Key key_to_insert, PageID page_id_to_insert) {
 
   Key temp_keys[NUM_KEY_SLOTS + 1];
-  PageID temp_ptr[NUM_CHILD_PAGEID_SLOTS+1];
+  PageID temp_ptrs[NUM_CHILD_PAGEID_SLOTS+1];
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(old_page);
-  Key* key_start = GetKeysStartPointer(page);
-  Key* ptr_start = GetChildrenStartPointer(page);
+  Key* key_start = GetKeysStartPointer(old_page);
+  Key* ptr_start = GetChildrenStartPointer(old_page);
 
   memcpy(temp_keys, key_start, page_header->num_keys * KEY_SIZE);
-  memcpy(temp_ptr, ptr_start, (page_header->num_keys + 1) * CHILD_PTR_SIZE);
+  memcpy(temp_ptrs, ptr_start, (page_header->num_keys + 1) * CHILD_PTR_SIZE);
 
   Key* it = std::upper_bound(temp_keys, temp_keys + page_header->num_keys, key_to_insert);
   
@@ -87,42 +87,38 @@ uint16_t InternalPage::HandleSplit(Byte* old_page, Byte* new_page, Key key_to_in
   OffsetIndex index_child_ptr = it - temp_keys;
   OffsetIndex insertion_index = index_child_ptr + 1;
 
-  PageID* insertion_it = temp_ptr + insertion_index;
+  PageID* insertion_it = temp_ptrs + insertion_index;
 
-  if (insertion_it != temp_ptr + page_header->num_keys + 1) {
-    memmove(insertion_it+1, insertion_it, ((temp_ptr + page_header->num_keys + 1) - insertion_it) * sizeof(PageID));
+  if (insertion_it != temp_ptrs + page_header->num_keys + 1) {
+    memmove(insertion_it+1, insertion_it, ((temp_ptrs + page_header->num_keys + 1) - insertion_it) * sizeof(PageID));
   };
 
   *insertion_it = page_id_to_insert;
 
-  // size of temp_keys = page_header->num_keys + 1
-  // size of temp_ptr = page_header->num_keys + 2
-  
+  uint16_t new_keys_length = page_header->num_keys + 1; 
 
-  // 1 2 3 4 5
-  // 1 2 3 4 5 6
-
-  Key* boundary_key = temp_keys + ((page_header->num_keys + 1) / 2);
-  InternalPage::MakePage(old_page, temp_keys, temp_ptr, ((page_header->num_keys + 1) / 2), page_header->page_id, page_header->parent_pid);
-  InternalPage::MakePage(new_page, boundary_key + 1, temp_ptr + ((page_header->num_keys + 1) / 2) + 1, ((page_header->num_keys) / 2), page_id_to_insert, page_header->parent_pid);
+  Key* boundary_key = temp_keys + (new_keys_length / 2);
+  // correction
+  MakePage(old_page, temp_keys, temp_ptrs, (new_keys_length / 2), page_header->page_id, page_header->parent_pid);
+  MakePage(new_page, boundary_key + 1, temp_ptrs + (new_keys_length / 2) + 1, ((new_keys_length - 1) / 2), page_id_to_insert, page_header->parent_pid);
 
   return *boundary_key;  
 };
 
-
-Bool InsernalPage::MakePage(Byte* page, Key* keys_ptr, PageID* children_ptr, uint16_t keys_to_take, PageID pid, PageID parent_pid) {
+// ALERT: This might overwrite the keys into the space for child ptr and write child_ptr over the boundary of the page.
+Bool InternalPage::MakePage(Byte* page, Key* keys_ptr, PageID* children_ptr, uint16_t keys_to_take, PageID pid, PageID parent_pid) {
   
   Byte* curr = page;
-  *curr = PageType::InternalPage;
+  *curr = static_cast<Byte>(PageType::InternalPage);
 
   curr = curr + sizeof(PageType::InternalPage);
-  memcpy(curr, &pid, sizeof(value));
+  memcpy(curr, &pid, sizeof(pid));
 
   curr = curr + sizeof(pid);
   memcpy(curr, &keys_to_take, sizeof(keys_to_take)); 
 
   curr = curr + sizeof(keys_to_take);
-  memcpy(curr, &parent_pid, size(parent_pid));
+  memcpy(curr, &parent_pid, sizeof(parent_pid));
   
   curr = curr + sizeof(parent_pid);
   memcpy(curr, keys_ptr, sizeof(*keys_ptr) * keys_to_take);
@@ -198,7 +194,7 @@ RecordID LeafPage::InsertTuple(Byte* page, const Byte *buffer, BufferSize buffer
   SlotArrayElement* slot_array_end = page + (SLOT_SIZE * page_header->slot_array_size);
 
   SlotArrayElement* it = upper_bound(slot_array_start, slot_array_end, page, key);
-  memmove(it+SLOT_SIZE, it, (slot_array_end - it) * SLOT_SIZE);
+  if (it != slot_array_end) memmove(it+SLOT_SIZE, it, (slot_array_end - it) * SLOT_SIZE);
 
 
 
