@@ -1,15 +1,12 @@
-#include <./storageManager.h>
-#include <filesystem>
-
-using fs = std::filesystem;
-
+#include "../../include/storageManager/storageManager.h"
+namespace fs = std::filesystem;
 
 // Page ID: 0 will now be meta data pages.
 
 bool StorageManager::Bootstrap() {
 
-  if (!fs.exists(DATA_DIR)) {
-    fs.create_directories(DATA_DIR);
+  if (!fs::exists(DATA_DIR)) {
+    fs::create_directories(DATA_DIR);
     std::cout << "[INIT] Initialized data directory: " << DATA_DIR << std::endl;
   };
 
@@ -38,11 +35,11 @@ bool StorageManager::Bootstrap() {
 
   Byte buffer[PAGE_SIZE];
   Result<bool> read_result = ReadPage(0, buffer);
-  if (read_result.arr != ErrType::None) {
+  if (read_result.err != ErrType::None) {
     // handle error
   };
   
-  new_page_offset_index = reinterpret_cast<uint16_t*>(buffer);
+  memcpy(&new_page_offset_index, buffer, sizeof(uint16_t));
   return true;
 };
 
@@ -51,30 +48,30 @@ Result<bool> StorageManager::ReadPage(PageID pid, Byte *buffer) {
   ssize_t byte_count = pread(fd_database, buffer, PAGE_SIZE, off);
 
   if (byte_count == -1) {
-    return {.value : false, .err : DiskReadErr::SystemErr};
+    return {.value = false, .err = ErrType::SystemErr};
   };
 
   if (static_cast<size_t>(byte_count) != PAGE_SIZE) {
-    return {.value : false, .err : DiskReadErr::FileCorruption};
+    return {.value = false, .err = ErrType::FileCorruption};
   }
 
-  return {.value = true, .err = DiskReadErr::None};
+  return {.value = true, .err = ErrType::None};
 };
 
-Result<bool> StorageManager::PageWrite(PageID pid, const Byte *buffer) {
+Result<bool> StorageManager::WritePage(PageID pid, const Byte *buffer) {
   Offset off = pid * PAGE_SIZE;
 
   ssize_t byte_count = pwrite(fd_database, buffer, PAGE_SIZE, off);
 
   if (byte_count == -1) {
-    return {.value = false, .err = DiskWriteErr::SystemError};
+    return {.value = false, .err = ErrType::SystemErr};
   };
 
   if (static_cast<size_t>(byte_count) != PAGE_SIZE) {
-    return {.value = false, .err = DiskWriteErr::DiskFullOrTruncated};
+    return {.value = false, .err = ErrType::DiskFullOrTruncated};
   };
 
-  return {.value = true, .err = DiskWriteErr::None};
+  return {.value = true, .err = ErrType::None};
 };
 
 StorageManager::~StorageManager() {
@@ -102,9 +99,9 @@ StorageManager::~StorageManager() {
     }
     fd_logs = -1;
   }
-;
+};
 
-Result<PageID> AllocateNewPage() {
+Result<PageID> StorageManager::AllocateNewPage() {
 
   Offset offset = new_page_offset_index * PAGE_SIZE;
   int alloc_result = posix_fallocate(fd_database, offset, PAGE_SIZE);
@@ -114,9 +111,6 @@ Result<PageID> AllocateNewPage() {
   };
 
   new_page_offset_index++;
-  fd_database = open(DB_PATH, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
-  pwrite(fd_database, &new_page_offset_index, sizeof(off_start), 0);
-  return { .value = new_page_offset_index - 1, .err = ErrType::None };  
+  pwrite(fd_database, &new_page_offset_index, sizeof(new_page_offset_index), 0);
+  return { .value = (uint16_t)(new_page_offset_index - 1), .err = ErrType::None };  
 };
-
-

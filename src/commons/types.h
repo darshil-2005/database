@@ -43,7 +43,7 @@ enum ErrType {
   SystemErr,
 
   // Storage Manager Read
-  PageCorruption,
+  FileCorruption,
 
   // Storage Manager Write
   DiskFullOrTruncated,

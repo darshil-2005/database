@@ -32,22 +32,22 @@
 #include <../../commons/types.h>
 #include <../../include/bufferpool/bufferpool.h>
 #include <../../include/page/page.h>
+#include "../page/internal_page.h"
 
 class BTree {
   
   PageID root_page_id;
   BufferPool* buffer_pool;
+
   // Some variable that holds info about the key or maybe it shall be passed directly to the functions.
   // for this implementation we will assume the primary key is always 2 bytes and only allow indexing on those sizes.
   // The primary key will be kept immutable (both value and type).
-  
 
   BTree(BufferPool& bf);
 
   bool InsertTuple(const Byte* buffer, BufferSize buffer_size, Key key);
-  
   SplitReport FindPageToWrite(Key key, BufferSize buffer_size);
-  size_t WriteChunk(const Byte* buffer, BufferSize buffer_size, const uint16_t index);
+  size_t WriteChunk(const Byte* buffer, BufferSize buffer_size, Key key);
   NewPage RequestNewPage();
 };
 

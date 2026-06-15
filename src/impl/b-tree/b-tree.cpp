@@ -7,7 +7,21 @@ BTree::BTree(BufferPoll &bf) { this->buffer_pool = &bf; };
 bool BTree::InsertTuple(const Byte *buffer, BufferSize buffer_size, Key key) {
 
   NewPage to_write_page;
-  SplitReport report = FindPageToWrite(root_page_id, key, buffer_size, &to_write_page);
+  SplitReport report = BTree::FindPageToWrite(root_page_id, key, buffer_size, &to_write_page);
+
+  if (report.was_split) {
+    Record<NewPage> new_root_result = buffer_pool->AllocateNewPage();
+    // handle error
+    PageID new_root_id = new_root_result.value->pid;
+    Key keys_ptr[1] = { report.boundary_key };
+    PageID children_ptr[2] = { root_page_id, report.new_page_id };
+    InternalPage::MakePage(new_root_result.value->ptr, keys_ptr, children_ptr, 1, new_root_id);
+    root_page_id = new_root_id;
+  };
+
+  size_t written = BTree::WriteChunk
+
+
 };
 
 SplitReport BTree::FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, NewPage *to_write_page) {
@@ -16,7 +30,6 @@ SplitReport BTree::FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, 
   // handle errors here
 
   Byte *page = page_result.value;
-
   PageHeader *current_page_header = reinterpret_cast<PageHeader *>(page);
 
   if (current_page_header->page_type == PageType::LeafPage) {
@@ -103,105 +116,11 @@ SplitReport BTree::FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, 
   };
 };
 
-Result<SplitReport> BTree::WriteChunk(PageID pid, const Byte *buffer,
-                                      BufferSize buffer_size,
-                                      const uint16_t key, RecordID *result) {
+size_t BTree::WriteChunkLeaf(Byte* page, const Byte *buffer, BufferSize buffer_size, Key key) {
+  
+};
 
-  // handling the case where we are at an internal page.
-  // This function traveses the tree and reaches the leaf page where we need to
-  // insert; then tries to insert. If succeeds fine if not try to deal with that
-  // issue by splitting the page. and then recursively deals with the issues.
-  //
-  //
-  // buffer only has the data of the tuple rest has to be added by us
-  // data of the tuple always starts with a 2 byte key.
-
-  Result<Byte *> page = buffer_pool->RequestPage(pid);
-
-  if (page.err != ErrType::None) {
-    // handle errors here
-  };
-
-  PageHeader *current_page_header = reinterpret_cast<PageHeader *>(page);
-
-  if (current_page_header->page_type == PageType::LeafPage) {
-
-    uint16_t available_space = LeafPage::CheckAvailableSpace(page);
-    uint16_t min_entry = TUPLE_HEADER_SIZE + min(128, buffer_size);
-
-    if (min_entry + SLOT_SIZE <= available_space) {
-      RecordID record_location =
-          LeafPage::InsertTuple(page, buffer, buffer_size);
-      *result = record_location;
-      buffer_pool->ReleasePage(pid, true);
-      return {
-          .value = {.was_split = 0, .new_page_id = 0, .boundary_key = 0},
-      };
-    };
-
-    Result<NewPage> new_page = buffer_pool->AllocateNewPage();
-    // handle errors here
-
-    uint16_t boundary_key =
-        LeafPage::HandleSplit(page, new_page, buffer, buffer_size);
-    buffer_pool->ReleasePage(pid, true);
-    buffer_pool->ReleasePage(new_page.pid, true);
-    return {.value = {.boundary_key = boundary_key,
-                      .was_split = 1,
-                      .new_page_id = new_page.pid},
-            .err = ErrType::None};
-
-  } else if (current_page_header->page_type == PageType::InternalPage) {
-    Result<PageID> child_page = InternalPage::GetChildPageID(page, key);
-
-    // handle error from above if any
-
-    PageID child_page_id = child_page.value;
-
-    Result<SplitReport> recursion_result =
-        InsertTuple(child_page_id, buffer, buffer_size, key, result);
-
-    // handle errors if any here
-
-    SplitReport report = recursion_result.value;
-
-    if (report.was_split != 0) {
-
-      // check if there is sufficient space in the current node
-      InternalPageHeader *internal_page_header =
-          reinterpret_cast<InternalPageHeader *>(page);
-      // hard coded for now will change if there is variable sized keys.
-      Bool slot_avalaible = InternalPage::CheckSlotAvailable(page, KEY_SIZE);
-
-      if (slot_available > 0) {
-        Bool result = InternalPage::InsertKeyValue(page, report.boundary_key,
-                                                   report.new_page_pid);
-        if (result == 0) {
-          // handle errors
-        };
-        buffer_pool->ReleasePage(pid, true);
-        return {.value = {.was_split = 0, .new_page_id = 0, .boundary_key = 0},
-                .err = ErrType::None};
-      } else {
-        Result<NewPage> new_page = buffer_pool->AllocateNewPage();
-        // handle errors here
-
-        uint16_t boundary_key = InternalPage::HandleSplit(
-            page, new_page, report.boundary_key, report.new_pid);
-        buffer_pool->ReleasePage(pid, true);
-        buffer_pool->ReleasePage(new_page.pid, true);
-
-        return {.value = {.boundary_key = boundary_key,
-                          .was_split = 1,
-                          .new_page_id = new_page.pid},
-                .err = ErrType::None};
-      };
-    } else {
-      buffer_pool->ReleasePage(pid, true);
-      return {.value = {.boundary_key = 0, .was_split = 0, .new_page_id = 0},
-              .err = ErrType::None};
-    };
-  };
+size_t BTree::WriteChunkOverflow(Byte* page, const Byte *buffer, BufferSize buffer_size, Key key) {
 };
 
 NewPage BTree::RequestPage() {
