@@ -7,7 +7,8 @@ using PageID = uint16_t;
 using SlotID = uint16_t;
 
 using Key = uint16_t;
-using Offset = uint16_t;
+using Offset = uint64_t;
+using PageOffset = uint16_t;
 using OffsetIndex = uint16_t;
 
 using TupleLength = uint16_t;

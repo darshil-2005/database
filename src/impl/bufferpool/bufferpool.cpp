@@ -4,7 +4,7 @@ BufferPool::BufferPool(StorageManager &sm_input) {
   this->storage_manager = &sm_input;
 
   int aligned =
-      posix_memalign((Byte **)&buffer_pool, PAGE_SIZE, POOL_SIZE * PAGE_SIZE);
+      posix_memalign((void **)&buffer_pool, PAGE_SIZE, POOL_SIZE * PAGE_SIZE);
 
   if (aligned == ENOMEM) {
     std::cout << "[FATAL ERROR] Cannot allocate aligned memory to buffer pool."
@@ -23,11 +23,28 @@ BufferPool::~BufferPool() {
   };
 };
 
+void BufferPool::DumpCurrBufferPool() {
+
+  int cnt = 0;
+  for (int i=0; i<POOL_SIZE; i++) {
+    if (buffer_pool_meta[i].pin_count > 0) {
+      std::cout << buffer_pool_meta[i].page_id << ", ";
+      // std::cout << "Pin Count: " << buffer_pool_meta[i].pin_count << std::endl;
+      // std::cout << "Reference Bit: " << static_cast<int>(buffer_pool_meta[i].reference_bit) << std::endl;
+      cnt++;
+    };
+  };
+  std::cout<<std::endl;
+  std::cout << cnt << std::endl;
+  std::cout << std::endl;
+};
+
 Result<OffsetIndex> BufferPool::FindPageToEvict() {
   ssize_t index = -1;
 
   size_t MAX_ITERS = 2 * unpinned_frames.size();
   for (int i = 0; i < MAX_ITERS; i++) {
+    if (unpinned_frames.empty()) break;
     index = unpinned_frames.front();
     unpinned_frames.pop();
     BufferFrameMeta &frame_meta = buffer_pool_meta[index];
@@ -43,9 +60,9 @@ Result<OffsetIndex> BufferPool::FindPageToEvict() {
   };
 
   if (index == -1) {
-    return {.value = 0, .err = ErrType::AllPagesPinned};
+    return {.value = (OffsetIndex)0, .err = ErrType::AllPagesPinned};
   };
-  return {.value = index, .err = ErrType::None};
+  return {.value = (OffsetIndex)index, .err = ErrType::None};
 };
 
 Result<OffsetIndex> BufferPool::EvictPage(OffsetIndex index) {
@@ -65,7 +82,7 @@ Result<OffsetIndex> BufferPool::EvictPage(OffsetIndex index) {
 
   page_table.erase(frame_meta.page_id);
   frame_meta = (struct BufferFrameMeta){
-      .page_id = -1,
+      .page_id = 0,
       .pin_count = 0,
       .is_dirty = false,
       .reference_bit = 0,
@@ -100,7 +117,7 @@ Result<Byte *> BufferPool::RequestPage(PageID pid) {
 
   if (free_space.err != ErrType::None) {
     // No free space
-    Result<OffsetIndex> page_to_evict = FindPageToEvict();
+    Result<OffsetIndex> page_to_evict = BufferPool::FindPageToEvict();
     if (page_to_evict.err != ErrType::None) {
       return {.value = nullptr, .err = ErrType::BufferPoolFull};
     };
@@ -112,8 +129,7 @@ Result<Byte *> BufferPool::RequestPage(PageID pid) {
     index = evicted_index.value;
   } else {
     index = free_space.value;
-    // Probably bad design for multi threaded architecture but fine for my
-    // implementation.
+    // Probably bad design for multi threaded architecture but fine for my implementation.
     free_frames.pop_back();
   };
 
@@ -121,9 +137,16 @@ Result<Byte *> BufferPool::RequestPage(PageID pid) {
   Result<bool> storage_read_status =
       storage_manager->ReadPage(pid, buffer_pool + offset);
 
+  /*
+  Byte bbb[PAGE_SIZE];
+
+  Result<bool> sr =
+      storage_manager->ReadPage(pid, bbb);
+  */
+  
   // Maybe we can handle this hear rather than passing it upwards
   if (storage_read_status.value == false) {
-    return {.value = nullptr, .err = storage_read_status.err};
+    return {.value = nullptr, .err = ErrType::SystemErr };
   };
 
   buffer_pool_meta[index].pin_count = 1;
@@ -135,7 +158,7 @@ Result<Byte *> BufferPool::RequestPage(PageID pid) {
   return {.value = buffer_pool + offset, .err = ErrType::None};
 };
 
-Result<bool> ReleasePage(PageID pid, bool is_dirty) {
+Result<bool> BufferPool::ReleasePage(PageID pid, bool is_dirty) {
   if (!page_table.count(pid)) {
     return {.value = false, .err = ErrType::PageNotFoundInBufferPool};
   };
@@ -144,17 +167,23 @@ Result<bool> ReleasePage(PageID pid, bool is_dirty) {
   BufferFrameMeta &frame_meta = buffer_pool_meta[index];
   frame_meta.pin_count--;
   if (frame_meta.pin_count == 0) {
-    unpinned_frames.push_back(index);
+    unpinned_frames.push(index);
   };
-  frame_meta[index].is_dirty = true;
-  return {.val = true, .err = ErrType::None};
+  frame_meta.is_dirty = frame_meta.is_dirty ? true : is_dirty;
+  return {.value = true, .err = ErrType::None};
 };
 
-Result<NewPage> AllocateNewPage(){
+Result<NewPage> BufferPool::AllocateNewPage(){
   Result<PageID> result = storage_manager->AllocateNewPage();
   // handle errors
-  Result<Byte*> ptr_to_page = RequestPage(result.value);
-  return { .value = { .value = { .pid = result.value, .ptr = ptr_to_page }, .err = ErrType::None }, .err = ErrType::None }
+  Result<Byte*> ptr_to_page = BufferPool::RequestPage(result.value);
+  if (ptr_to_page.err != ErrType::None) {
+    return { .value = { .ptr = nullptr, .pid = 0}, .err = ptr_to_page.err };
+  };
+
+  // handle errors
+  NewPage response = { .ptr = ptr_to_page.value, .pid = result.value };
+  return { .value = response, .err = ErrType::None };
 };
 
 

@@ -71,7 +71,7 @@ Key LeafPage::HandleSplit(Byte* old_page, Byte* new_page, PageID new_pid) {
 
 bool LeafPage::MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t slot_array_size, Byte* buffer, PageID pid, PageID left_pid, PageID right_pid) {
 
-  Offset free_space_end_offset = PAGE_SIZE - 1;
+  PageOffset free_space_end_offset = PAGE_SIZE - 1;
   LeafPageHeader* page_header = reinterpret_cast<LeafPageHeader*>(page);
 
   page_header->slot_array_size = slot_array_size;
@@ -83,7 +83,7 @@ bool LeafPage::MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t
   SlotArrayElement* slot_array = reinterpret_cast<SlotArrayElement*>(page + LEAF_PAGE_HEADER_SIZE);
 
   for (int i=0; i<slot_array_size; i++) {
-    Offset offset = slot_array_start[i]->offset;
+    PageOffset offset = slot_array_start[i]->offset;
     TupleLength length = slot_array_start[i]->length;
 
     memcpy(page + free_space_end_offset - length + 1, buffer + offset, length); 

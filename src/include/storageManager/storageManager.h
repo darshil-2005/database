@@ -1,3 +1,4 @@
+#pragma once
 #include "../../commons/types.h"
 #include "../../commons/constants.h"
 #include <unistd.h>

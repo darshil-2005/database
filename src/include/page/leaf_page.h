@@ -41,7 +41,7 @@ struct __attribute__((__packed__)) OverflowInfo {
 };
   
 struct __attribute__((__packed__)) SlotArrayElement {
-  Offset offset;
+  PageOffset offset;
   uint16_t length;
 };
 
@@ -59,7 +59,7 @@ struct __attribute__((__packed__)) LeafPageHeader {
   PageID page_id;
   // free space end
   // num of bytes from the start of the page to the last free byte.
-  Offset free_space_end_offset;
+  PageOffset free_space_end_offset;
   // slot array size
   uint16_t slot_array_size;
   // sibling prev pageid

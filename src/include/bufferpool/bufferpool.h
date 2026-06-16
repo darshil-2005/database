@@ -1,13 +1,17 @@
 
+#pragma once
 #include "../../commons/constants.h"
 #include "../../commons/types.h"
-#include "../storageManger/storageManager.h"
+#include "../storageManager/storageManager.h"
 #include <unordered_map>
+#include <vector>
+#include <queue>
 #include <stdlib.h>
+#include <iostream>
 
 // 5 Bytes
-struct BufferFrameMeta {
-  PageID page_id = -1;
+struct __attribute__((__packed__)) BufferFrameMeta {
+  PageID page_id = 0;
   uint16_t pin_count = 0;
   bool is_dirty = false;
   uint8_t reference_bit = 0;
@@ -20,13 +24,15 @@ class BufferPool {
   Result<Byte*> RequestPage(PageID pid);
   Result<bool> ReleasePage(PageID pid, bool is_dirty);
   Result<NewPage> AllocateNewPage();
-  
+  void DumpCurrBufferPool();
+
+  Byte* buffer_pool;
+
   private:
   StorageManager* storage_manager;
-  unordered_map<PageID, OffsetIndex> page_table;
-  vector<OffsetIndex> free_frames;
-  queue<OffsetIndex> unpinned_frames;
-  Byte* buffer_pool;
+  std::unordered_map<PageID, OffsetIndex> page_table;
+  std::vector<OffsetIndex> free_frames;
+  std::queue<OffsetIndex> unpinned_frames;
   BufferFrameMeta buffer_pool_meta[POOL_SIZE];
 
   // Return Err no free page found
