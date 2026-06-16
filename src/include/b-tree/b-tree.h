@@ -1,4 +1,4 @@
-
+#pragma once
 /* 
  * B Tree Implementation Plan
  *
@@ -29,10 +29,11 @@
  *
  */
 
-#include <../../commons/types.h>
-#include <../../include/bufferpool/bufferpool.h>
-#include <../../include/page/page.h>
+#include "../../commons/types.h"
+#include "../../include/bufferpool/bufferpool.h"
+#include "../../include/page/page.h"
 #include "../page/internal_page.h"
+#include "../page/leaf_page.h"
 
 struct WriteStatus {
   uint16_t written;
@@ -54,6 +55,6 @@ class BTree {
   SplitReport FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, NewPage *to_write_page);
   WriteStatus WriteChunkLeaf(Byte* page, const Byte* buffer, BufferSize buffer_size, Key key);
   WriteStatus WriteChunkOverflow(Byte* page, const Byte* buffer, BufferSize buffer_size);
-  SearchResult Search(Key key);
+  SearchResult Search(PageID pid, Key key);
 };
 

@@ -1,115 +1,53 @@
 #include "./utils/catch.hpp"
+#include "../src/include/page/leaf_page.h"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-
-constexpr size_t PAGE_SIZE = 4096;
-constexpr size_t GENERAL_PAGE_HEADER_SIZE = 5;
-constexpr size_t TABLE_PAGE_HEADER_SIZE = 11;
-constexpr size_t TABLE_PAGE_DATA_SIZE = 4008;
-constexpr size_t BUFFER_FRAME_META_SIZE = 5;
-
-constexpr size_t TUPLE_SIZE_LIMIT = 1500;
-constexpr size_t TUPLE_HEADER_SIZE = 9;
-
-using PageID = uint16_t;
-using SlotID = uint16_t;
-
-using Key = uint16_t;
-using Offset = uint16_t;
-using OffsetIndex = uint16_t;
-
-using TupleLength = uint16_t;
-using AttributeCount = uint16_t;
-using Byte = std::byte;
-using DeleteStatus = bool;
-using BitmapSize = uint16_t;
-using OperationStatus = bool;
-using Bool = uint8_t;
-
-using BufferSize = uint16_t;
-
-struct __attribute__((__packed__)) RecordID {
-  PageID pid;
-  OffsetIndex slot_index;
-};
-
-struct __attribute__((__packed__)) SlotArrayElement {
-  Offset offset;
-  uint16_t length;
-  Bool overflow;
-  RecordID next_record;
-};
-
-enum class PageType : uint8_t {
-    Meta = 1,
-    InternalPage = 2,
-    LeafPage = 3,
-    FreeSpaceMap = 4,
-    OverflowPage = 5,
-};
-
-SlotArrayElement *test_upper_bound(SlotArrayElement *start,
-                              SlotArrayElement *end, Byte *page, Key x) {
-
-  int16_t n = end - start;
-  int16_t l = 0;
-  int16_t r = n - 1;
-  int16_t ans = n;
-
-  while (l <= r) {
-    uint16_t mid = l + (r - l) / 2;
-    const SlotArrayElement *element = start + mid;
-    Byte *tuple = page + element->offset;
-    Key *key = reinterpret_cast<Key *>(tuple + TUPLE_HEADER_SIZE);
-    if (*key <= x) {
-      l = mid + 1;
-    } else {
-      ans = mid;
-      r = mid - 1;
-    };
-  };
-
-  return start + ans;
-};
-
-struct LeafPageHeader {
-  // page type
-  PageType page_type;
-  // page id
-  PageID page_id;
-  // free space end
-  // num of bytes from the start of the page to the last free byte.
-  Offset free_space_end_offset;
-  // slot array size
-  uint16_t slot_array_size;
-  // sibling prev pageid
-  PageID prev_pid;
-  // sibling next pageid
-  PageID next_pid;
-  // parent pageid
-  PageID parent_pid;
-};
-
+#include <iostream>
 
 void manually_insert_tuple(Byte *page_buffer, SlotArrayElement *slots,
-                           int slot_index, uint16_t memory_offset,
+                           uint16_t slot_index, uint16_t memory_offset,
                            Key key_value) {
   slots[slot_index].offset = memory_offset;
   slots[slot_index].length = sizeof(Key) + TUPLE_HEADER_SIZE;
   Byte *tuple_address = page_buffer + memory_offset;
   tuple_address[0] = std::byte{0};
+  
+  // if (tuple_address + TUPLE_HEADER_SIZE == page_buffer + memory_offset)
+
   std::memcpy(tuple_address + TUPLE_HEADER_SIZE, &key_value, sizeof(Key));
 };
 
-TEST_CASE("Upperbound function for inserting slot elements.", "Binary Search") {
+void DumpPage(Byte* page) {
+  LeafPageHeader* page_header = reinterpret_cast<LeafPageHeader*>(page);
+
+  std::cout << "Page Type: " << static_cast<int>(page_header->page_type) << std::endl;
+  std::cout << "Page ID: " << page_header->page_id << std::endl;
+  std::cout << "Free Space End Offset: " << page_header->free_space_end_offset << std::endl;
+  std::cout << "Slot Array Size: " << page_header->slot_array_size << std::endl;
+  std::cout << "Left Sibling: " << page_header->left_pid << std::endl;
+  std::cout << "Right Sibling: " << page_header->right_pid << std::endl;
+
+  SlotArrayElement* slot_array = reinterpret_cast<SlotArrayElement*>(page + LEAF_PAGE_HEADER_SIZE);
+  for (int i=0; i<page_header->slot_array_size; i++) {
+    OverflowInfo* overflow_info = reinterpret_cast<OverflowInfo*>(page + slot_array[i].offset);
+    std::cout << "=========================================" << std::endl;
+    std::cout << "Tuple Offset: " << slot_array[i].offset << std::endl;
+    std::cout << "Tuple Length: " << slot_array[i].length << std::endl;
+    std::cout << "Tuple Overflow: " << static_cast<int>(overflow_info->overflow) << std::endl;
+    std::cout << "Overflow Page: " << overflow_info->overflow_page << std::endl;
+    std::cout << "Key: " << *reinterpret_cast<uint16_t*>(page + slot_array[i].offset + TUPLE_HEADER_SIZE) << std::endl;
+  };
+};
+
+TEST_CASE("Upperbound function for inserting slot elements.", "[binary_search") {
 
   Byte page[4096];
-  SlotArrayElement *slots = reinterpret_cast<SlotArrayElement *>(page + 13);
+  SlotArrayElement *slots = reinterpret_cast<SlotArrayElement *>(page + LEAF_PAGE_HEADER_SIZE);
   uint8_t page_type = 3;
   uint16_t page_id = 66;
   uint16_t free_space_end_offset = 4095;
-  uint16_t slot_array_size = 0;
+  uint16_t slot_array_size = 3;
   PageID prev_pid = 66;
   PageID next_pid = 66;
   PageID parent_pid = 66;
@@ -129,18 +67,152 @@ TEST_CASE("Upperbound function for inserting slot elements.", "Binary Search") {
   SlotArrayElement *end = slots + 3;
 
   SECTION("Target smaller than all elements (Underflow Edge)") {
-    REQUIRE((test_upper_bound(start, end, page, 5) - start) == 0);
+    REQUIRE((LeafPage::upper_bound(start, end, page, 5) - start) == 0);
   }
 
   SECTION("Target matches exact element (Upper Bound Invariant)") {
-    REQUIRE((test_upper_bound(start, end, page, 10) - start) == 1);
+    REQUIRE((LeafPage::upper_bound(start, end, page, 10) - start) == 1);
   }
 
   SECTION("Target falls between elements") {
-    REQUIRE((test_upper_bound(start, end, page, 25) - start) == 2);
+    REQUIRE((LeafPage::upper_bound(start, end, page, 25) - start) == 2);
   }
 
   SECTION("Target larger than all elements (Overflow Edge)") {
-    REQUIRE((test_upper_bound(start, end, page, 50) - start) == 3);
+    REQUIRE((LeafPage::upper_bound(start, end, page, 50) - start) == 3);
   }
 };
+
+TEST_CASE("Lowerbound function for inserting slot elements.", "[binary_search") {
+
+  Byte page[4096];
+  SlotArrayElement *slots = reinterpret_cast<SlotArrayElement *>(page + LEAF_PAGE_HEADER_SIZE);
+  uint8_t page_type = 3;
+  uint16_t page_id = 66;
+  uint16_t free_space_end_offset = 4095;
+  uint16_t slot_array_size = 3;
+  PageID prev_pid = 66;
+  PageID next_pid = 66;
+  PageID parent_pid = 66;
+  memcpy(page, &page_type, 1);
+  memcpy(page + 1, &page_id, 2);
+  memcpy(page + 3, &free_space_end_offset, 2);
+  memcpy(page + 5, &slot_array_size, 2);
+  memcpy(page + 7, &prev_pid, 2);
+  memcpy(page + 9, &next_pid, 2);
+  memcpy(page + 11, &parent_pid, 2);
+
+  manually_insert_tuple(page, slots, 0, 4000, 10);
+  manually_insert_tuple(page, slots, 1, 3950, 20);
+  manually_insert_tuple(page, slots, 2, 3900, 30);
+
+  SlotArrayElement *start = slots;
+  SlotArrayElement *end = slots + 3;
+
+  SECTION("Target smaller than all elements (Underflow Edge)") {
+    REQUIRE((LeafPage::lower_bound(start, end, page, 5) - start) == 0);
+  }
+
+  SECTION("Target matches exact element (Lower Bound Invariant)") {
+    REQUIRE((LeafPage::lower_bound(start, end, page, 10) - start) == 0);
+  }
+
+  SECTION("Target falls between elements") {
+    REQUIRE((LeafPage::lower_bound(start, end, page, 25) - start) == 2);
+  }
+
+  SECTION("Target larger than all elements (Overflow Edge)") {
+    REQUIRE((LeafPage::lower_bound(start, end, page, 50) - start) == 3);
+  }
+};
+
+TEST_CASE("LeafPage core operations and data size variations", "[leaf_page]") {
+    Byte page[4096];
+    SlotArrayElement *slots = reinterpret_cast<SlotArrayElement *>(page + LEAF_PAGE_HEADER_SIZE);
+    uint8_t page_type = 3;
+    uint16_t page_id = 66;
+    uint16_t free_space_end_offset = 4095;
+    PageID prev_pid = 66;
+    PageID next_pid = 66;
+    PageID parent_pid = 66;
+
+    auto reset_page = [&](uint16_t num_slots) {
+        std::memset(page, 0, 4096);
+        std::memcpy(page, &page_type, 1);
+        std::memcpy(page + 1, &page_id, 2);
+        std::memcpy(page + 3, &free_space_end_offset, 2);
+        std::memcpy(page + 5, &num_slots, 2);
+        std::memcpy(page + 7, &prev_pid, 2);
+        std::memcpy(page + 9, &next_pid, 2);
+        std::memcpy(page + 11, &parent_pid, 2);
+    };
+
+    SECTION("Search retrieves correct tuples when exactly 3 exist") {
+        reset_page(3);
+        manually_insert_tuple(page, slots, 0, 4000, 10);
+        manually_insert_tuple(page, slots, 1, 3950, 20);
+        manually_insert_tuple(page, slots, 2, 3900, 30);
+
+        SearchResult res1 = LeafPage::Search(page, 10);
+        REQUIRE(res1.ptr != nullptr);
+        REQUIRE(*reinterpret_cast<int16_t*>(res1.ptr + TUPLE_HEADER_SIZE) == 10);
+
+        SearchResult res2 = LeafPage::Search(page, 20);
+        REQUIRE(res2.ptr != nullptr);
+        REQUIRE(*reinterpret_cast<int16_t*>(res2.ptr + TUPLE_HEADER_SIZE) == 20);
+
+        SearchResult res3 = LeafPage::Search(page, 30);
+        REQUIRE(res3.ptr != nullptr);
+        REQUIRE(*reinterpret_cast<int16_t*>(res3.ptr + TUPLE_HEADER_SIZE) == 30);
+    }
+
+    SECTION("Search returns null when looking for non-existent keys") {
+        reset_page(3);
+        manually_insert_tuple(page, slots, 0, 4000, 10);
+        manually_insert_tuple(page, slots, 1, 3950, 20);
+        manually_insert_tuple(page, slots, 2, 3900, 30);
+
+        SearchResult res_missing_low = LeafPage::Search(page, 5);
+        REQUIRE(res_missing_low.ptr == nullptr);
+
+        SearchResult res_missing_mid = LeafPage::Search(page, 25);
+        REQUIRE(res_missing_mid.ptr == nullptr);
+
+        SearchResult res_missing_high = LeafPage::Search(page, 99);
+        REQUIRE(res_missing_high.ptr == nullptr);
+    }
+
+    SECTION("Search safely handles an entirely empty page") {
+        reset_page(0);
+        
+        SearchResult res = LeafPage::Search(page, 10);
+        REQUIRE(res.ptr == nullptr);
+    }
+
+    SECTION("Search scales correctly with a large volume of tuples") {
+        uint16_t num_tuples = 60;
+        reset_page(num_tuples);
+
+        uint16_t current_offset = 4050;
+        for (int i = 0; i < num_tuples; i++) {
+            int16_t key = (i + 1) * 5;
+            current_offset -= 50;
+            manually_insert_tuple(page, slots, i, current_offset, key);
+        }
+
+        SearchResult res_first = LeafPage::Search(page, 5);
+        REQUIRE(res_first.ptr != nullptr);
+        REQUIRE(*reinterpret_cast<int16_t*>(res_first.ptr + TUPLE_HEADER_SIZE) == 5);
+
+        SearchResult res_mid = LeafPage::Search(page, 150);
+        REQUIRE(res_mid.ptr != nullptr);
+        REQUIRE(*reinterpret_cast<int16_t*>(res_mid.ptr + TUPLE_HEADER_SIZE) == 150);
+
+        SearchResult res_last = LeafPage::Search(page, 300);
+        REQUIRE(res_last.ptr != nullptr);
+        REQUIRE(*reinterpret_cast<int16_t*>(res_last.ptr + TUPLE_HEADER_SIZE) == 300);
+
+        SearchResult res_not_found = LeafPage::Search(page, 151);
+        REQUIRE(res_not_found.ptr == nullptr);
+    }
+}

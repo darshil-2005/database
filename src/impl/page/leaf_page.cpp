@@ -14,7 +14,7 @@ uint16_t LeafPage::CheckAvailableSpace(Byte* page) {
   return free_bytes;
 };
 
-SlotArrayElement* upper_bound(const SlotArrayElement* start, const SlotArrayElement* end, Byte* page, Key x) {
+SlotArrayElement* LeafPage::upper_bound(SlotArrayElement* start, SlotArrayElement* end, Byte* page, Key x) {
 
   int16_t n = end - start;
   int16_t l = 0;
@@ -39,18 +39,18 @@ SlotArrayElement* upper_bound(const SlotArrayElement* start, const SlotArrayElem
 
 Key LeafPage::HandleSplit(Byte* old_page, Byte* new_page, PageID new_pid) {
 
-  Byte* buffer[PAGE_SIZE];
+  Byte buffer[PAGE_SIZE];
   memmove(buffer, old_page, PAGE_SIZE);
 
   uint16_t threshold = (PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / 2;
   uint16_t consumed_space = 0;
 
   LeafPageHeader* page_header = reinterpret_cast<LeafPageHeader*>(buffer);
-  SlotArrayElement* slot_array_start = old_page + LEAF_PAGE_HEADER_SIZE;
-  SlotArrayElement* slot_array_new_page_start = old_page + LEAF_PAGE_HEADER_SIZE;
+  SlotArrayElement* slot_array_start = reinterpret_cast<SlotArrayElement*>(old_page + LEAF_PAGE_HEADER_SIZE);
+  SlotArrayElement* slot_array_new_page_start = reinterpret_cast<SlotArrayElement*>(old_page + LEAF_PAGE_HEADER_SIZE);
 
   for (int i=0; i < page_header->slot_array_size; i++) {
-    SlotArrayElement* current = slot_array_start[i];
+    SlotArrayElement* current = slot_array_start + i;
     consumed_space = consumed_space + current->length;
     if (consumed_space > threshold) {
       slot_array_new_page_start = current + 1;      
@@ -63,7 +63,7 @@ Key LeafPage::HandleSplit(Byte* old_page, Byte* new_page, PageID new_pid) {
 
   LeafPage::MakePage(new_page, slot_array_new_page_start, 
       (uint16_t)((slot_array_start + page_header->slot_array_size) - slot_array_new_page_start),
-      buffer, new_pid, page_header->page_id, page_header->right_id);
+      buffer, new_pid, page_header->page_id, page_header->right_pid);
 
   Key boundary_key = LeafPage::GetKeyFromSlotElement(buffer, slot_array_new_page_start);
   return boundary_key;
@@ -83,13 +83,13 @@ bool LeafPage::MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t
   SlotArrayElement* slot_array = reinterpret_cast<SlotArrayElement*>(page + LEAF_PAGE_HEADER_SIZE);
 
   for (int i=0; i<slot_array_size; i++) {
-    PageOffset offset = slot_array_start[i]->offset;
-    TupleLength length = slot_array_start[i]->length;
+    PageOffset offset = slot_array_start[i].offset;
+    TupleLength length = slot_array_start[i].length;
 
     memcpy(page + free_space_end_offset - length + 1, buffer + offset, length); 
-    slot_array[i]->offset = free_space_end_offset - length + 1;
-    slot_array[i]->length = length;
-    free_space_end_offset = slot_array[i]->offset;
+    slot_array[i].offset = free_space_end_offset - length + 1;
+    slot_array[i].length = length;
+    free_space_end_offset = slot_array[i].offset;
   };
 
   page_header->free_space_end_offset = free_space_end_offset;
@@ -97,7 +97,7 @@ bool LeafPage::MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t
   return true;
 };
 
-SlotArrayElement* lower_bound(const SlotArrayElement* start, const SlotArrayElement* end, Byte* page, Key x) {
+SlotArrayElement* LeafPage::lower_bound(SlotArrayElement* start, SlotArrayElement* end, Byte* page, Key x) {
 
   int16_t n = end - start;
   int16_t l = 0;
@@ -120,7 +120,7 @@ SlotArrayElement* lower_bound(const SlotArrayElement* start, const SlotArrayElem
   return start + ans;
 };
 
-Key GetKeyFromSlotElement(Byte* page, SlotArrayElement* element) {
+Key LeafPage::GetKeyFromSlotElement(Byte* page, SlotArrayElement* element) {
   uint16_t key;
   Byte* key_address = page + element->offset + TUPLE_HEADER_SIZE;
   memcpy(&key, key_address, sizeof(uint16_t));
@@ -130,9 +130,9 @@ Key GetKeyFromSlotElement(Byte* page, SlotArrayElement* element) {
 SearchResult LeafPage::Search(Byte* page, Key key) {
   
   LeafPageHeader* page_header = reinterpret_cast<LeafPageHeader*>(page);
-  SlotArrayElement* slot_array_start = page + LEAF_PAGE_HEADER_SIZE;
-  SlotArrayElement* slot_array_end = slot_array_start + page_header->slot_array_size;
-  SlotArrayElement* search_result = lower_bound(slot_array_start, slot_array_end, page, key);
+  SlotArrayElement* slot_array_start = reinterpret_cast<SlotArrayElement*>(page + LEAF_PAGE_HEADER_SIZE);
+  SlotArrayElement* slot_array_end = reinterpret_cast<SlotArrayElement*>(slot_array_start + page_header->slot_array_size);
+  SlotArrayElement* search_result = LeafPage::lower_bound(slot_array_start, slot_array_end, page, key);
 
   if (search_result == slot_array_end) {
     return { .size = 0, .ptr = nullptr };

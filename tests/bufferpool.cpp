@@ -1,7 +1,6 @@
 #include "./utils/catch.hpp"
 #include "../src/include/bufferpool/bufferpool.h"
 #include "../src/include/storageManager/storageManager.h"
-#include <random>
 #include <vector>
 
 TEST_CASE("BufferPool Core Operations", "[bufferpool]") {

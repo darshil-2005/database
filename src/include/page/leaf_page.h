@@ -72,8 +72,11 @@ namespace LeafPage {
   // SlotArrayElement* slot_array;
   // data : slot array | free space | tuples
   RecordID InsertTuple(Byte* page, const Byte *buffer, BufferSize buffer_size, Key key);
-  Key HandleSplit(Byte* page, Byte* new_page);
+  Key HandleSplit(Byte* page, Byte* new_page, PageID pid);
   bool MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t slot_array_size, Byte* buffer, PageID pid, PageID left_pid, PageID right_pid);
   uint16_t CheckAvailableSpace(Byte* page);
   SearchResult Search(Byte* page, Key key);
+  SlotArrayElement* upper_bound(SlotArrayElement* start, SlotArrayElement* end, Byte* page, Key x);
+  SlotArrayElement* lower_bound(SlotArrayElement* start, SlotArrayElement* end, Byte* page, Key x);
+  Key GetKeyFromSlotElement(Byte* page, SlotArrayElement* element); 
 };
