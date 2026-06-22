@@ -35,10 +35,6 @@
 #include "../page/internal_page.h"
 #include "../page/leaf_page.h"
 
-struct WriteStatus {
-  uint16_t written;
-  Byte* overflow_info_store_address;
-};
 
 class BTree {
   
@@ -52,10 +48,11 @@ class BTree {
 
   BTree(BufferPool& bf, PageID root_id);
 
-  bool InsertTuple(const Byte* buffer, BufferSize buffer_size, Key key);
+  bool InsertTuple(Byte* buffer, BufferSize buffer_size, Key key);
   SplitReport FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, NewPage *to_write_page);
   PayloadStream Search(PageID pid, Key key);
   PageID GetRootPageID() const;
+  DeleteStatus Delete(PageID pid, Key key);
 };
 
 

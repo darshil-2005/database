@@ -42,7 +42,7 @@ constexpr uint16_t LEAF_UNDERFLOW_THRESHOLD = 2 * (PAGE_SIZE - LEAF_PAGE_HEADER_
 
 // The tuple overflow if the size of its payload is bigger than this. The slot size and the tuple header size
 // are subtracted because this threshold looks at the payload only.
-constexpr uint16_t MAX_LEAF_PAGE_DATA = (UNDERFLOW_THRESHOLD / 2);
+constexpr uint16_t MAX_LEAF_PAGE_DATA = (LEAF_UNDERFLOW_THRESHOLD / 2);
 
 struct __attribute__((__packed__)) OverflowInfo {
   Bool overflow;
@@ -118,10 +118,9 @@ class PayloadStream {
 namespace LeafPage {
   // SlotArrayElement* slot_array;
   // data : slot array | free space | tuples
-  RecordID InsertTuple(Byte* page, const Byte *buffer, BufferSize buffer_size, Key key);
+
   Key HandleSplit(Byte* page, Byte* new_page, PageID pid);
   bool MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t slot_array_size, Byte* buffer, PageID pid, PageID left_pid, PageID right_pid);
-  uint16_t CheckAvailableSpace(Byte* page);
   SearchResult Search(Byte* page, Key key);
   SlotArrayElement* upper_bound(SlotArrayElement* start, SlotArrayElement* end, Byte* page, Key x);
   SlotArrayElement* lower_bound(SlotArrayElement* start, SlotArrayElement* end, Byte* page, Key x);
@@ -129,26 +128,21 @@ namespace LeafPage {
   Offset ReadPage(Byte* page, Byte* buffer, size_t n, Offset start_offset, Offset max_offset);
   uint32_t GetTupleSizeFromSlotElement(Byte* page, SlotArrayElement* element);
   
-  WriteStatus WriteChunkLeaf(Byte* page, const Byte* buffer, BufferSize buffer_size, Key key);
-  WriteStatus WriteChunkOverflow(Byte* page, const Byte* buffer, BufferSize buffer_size);
+  WriteStatus WriteChunkLeaf(Byte* page, Byte* buffer, BufferSize buffer_size, Key key, TupleHeader* default_tuple = nullptr);
+  WriteStatus WriteChunkOverflow(Byte* page, Byte* buffer, BufferSize buffer_size);
 
   uint16_t GetCurrentUsedSpace(Byte* page);
-  BorrowQuery CanLendFromRight(PageID pid, uint16_t needed);
-  BorrowQuery CanLendFromLeft(PageID pid, uint16_t needed);
-  Key HandleLeftBorrow(PageID pid, BorrowQuery borrow_report);
-  Key HandleRightBorrow(PageID pid, BorrowQuery borrow_report);
+  BorrowQuery CanLendFromRight(Byte* page, uint16_t needed);
+  BorrowQuery CanLendFromLeft(Byte* page, uint16_t needed);
+  Key HandleLeftBorrow(Byte* borrower_page, Byte* lender_page, BorrowQuery borrow_report);
+  Key HandleRightBorrow(Byte* borrower_page, Byte* lender_page, BorrowQuery borrow_report);
 
-  void MergePages(PageID to_page, PageID from_page);
+  uint16_t CheckAvailableSpace(Byte* page);
+  uint16_t CheckGarbageBytes(Byte* page);
+  bool DeleteTuple(Byte* page, Key key);
 
-
-
-
-
-
-
-
-
-
-
-
+  void MergePages(Byte* to_page, Byte* from_page);
+  void DefragmentPage(Byte* page);
+  Key GetPageFirstKey(Byte* page);
 };
+

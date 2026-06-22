@@ -13,7 +13,7 @@ constexpr uint16_t KEY_SIZE = 2;
 constexpr uint16_t CHILD_PTR_SIZE = 2;
 
 // this is defined in data_size as well and not count
-constexpr uint16_t INTERNAL_PAGE_UNDERFLOW_THRESHOLD = ((PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / 2) - KEY_SIZE - CHILD_PTR_SIZE;
+constexpr uint16_t INTERNAL_UNDERFLOW_THRESHOLD = ((PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / 2) - KEY_SIZE - CHILD_PTR_SIZE;
 
 struct __attribute__((__packed__)) InternalPageHeader {
   // page type
@@ -29,6 +29,7 @@ namespace InternalPage {
   // takes the pointer to first byte of the page and the key and return page_id of the page associated with that key in the internal page.
   PageID GetChildPageID(Byte* page, Key key);
 
+  uint16_t CheckUsedSpace(Byte* page);
   Bool CheckSlotAvailable(Byte* page, uint16_t key_size);
   Key* GetKeysStartPointer(Byte* page);
   PageID* GetChildrenStartPointer(Byte* page);
@@ -49,8 +50,11 @@ namespace InternalPage {
   Result<PageID> GetInternalLeftSibling(Byte* page, PageID pid);
   Result<PageID> GetInternalRightSibling(Byte* page, PageID pid);
 
-  BorrowQuery CanLend(PageID pid, uint16_t needed);
+  BorrowQuery CanLend(Byte* page, uint16_t needed);
 
-  void HandleLeftBorrow(Byte* page, PageID borrower_pid, BorrowQuery borrow_report);
-  void HandleRightBorrow(Byte* page, PageID borrower_pid, BorrowQuery borrow_report);
+  void HandleLeftBorrow(Byte* page, Byte* borrower_page, Byte* lender_page, BorrowQuery borrow_report);
+  void HandleRightBorrow(Byte* page, Byte* borrower_page, Byte* lender_page, BorrowQuery borrow_report);
+
+  Key DeletePartitionKeyAndChildPtr(Byte* page, PageID left_child_pid, PageID right_child_pid);
+  void MergePages(Key partition_key, Byte* absorber_page, Byte* absorbee_page);
 };

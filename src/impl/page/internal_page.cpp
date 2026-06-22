@@ -126,11 +126,11 @@ Result<PageID> InternalPage::GetLeafLeftSibling(Byte* page, PageID pid) {
 
   // apply binary search to the pageids/childptrs
 
-  InternalPageHeader* page_header = reinterpret_cast<InteralPageHeader*>(page);
+  InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
   PageID* childptr_start = InternalPage::GetChildrenStartPointer(page);
   PageID* childptr_end = childptr_start + page_header->num_keys + 1;
   
-  PageID* iter = std::binary_search(childptr_start, childptr_end, pid);
+  PageID* iter = std::find(childptr_start, childptr_end, pid);
 
   if (iter == childptr_end) {
     return { .value = 0, .err = ErrType::ChildPtrNotFound };
@@ -145,11 +145,11 @@ Result<PageID> InternalPage::GetLeafLeftSibling(Byte* page, PageID pid) {
 
 Result<PageID> InternalPage::GetLeafRightSibling(Byte* page, PageID pid) {
 
-  InternalPageHeader* page_header = reinterpret_cast<InteralPageHeader*>(page);
+  InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
   PageID* childptr_start = InternalPage::GetChildrenStartPointer(page);
   PageID* childptr_end = childptr_start + page_header->num_keys + 1;
   
-  PageID* iter = std::binary_search(childptr_start, childptr_end, pid);
+  PageID* iter = std::find(childptr_start, childptr_end, pid);
 
   if (iter == childptr_end) {
     return { .value = 0, .err = ErrType::ChildPtrNotFound };
@@ -169,7 +169,7 @@ Key* InternalPage::FindKeyFromChildren(Byte* page, PageID left_pid, PageID right
   PageID* childptrs_start = InternalPage::GetChildrenStartPointer(page);
   PageID* childptrs_end = childptrs_start + page_header->num_keys + 1;
 
-  PageID* iter = std::binary_search(childptrs_start, childptrs_end, left_pid);
+  PageID* iter = std::find(childptrs_start, childptrs_end, left_pid);
 
   OffsetIndex offset = iter - childptrs_start;
   
@@ -177,10 +177,8 @@ Key* InternalPage::FindKeyFromChildren(Byte* page, PageID left_pid, PageID right
 };
 
 void InternalPage::SetNewBoundaryKey(Byte* page, Key new_boundary_key, PageID left_pid, PageID right_pid) {
-
-  Key* key_ptr = InternalPage::FindBoundaryKey(page, left_pid, right_pid);
+  Key* key_ptr = InternalPage::FindKeyFromChildren(page, left_pid, right_pid);
   *key_ptr = new_boundary_key;
-
 };
 
 void InternalPage::DeleteKeyAndChildPtr(Byte* page, PageID merged_page, PageID absorbing_page) {
@@ -195,16 +193,16 @@ void InternalPage::DeleteKeyAndChildPtr(Byte* page, PageID merged_page, PageID a
   Key* keys_start = InternalPage::GetKeysStartPointer(page);
   Key* keys_end = keys_start + page_header->num_keys;
 
-  Key* iter_key = std::binary_search(keys_start, keys_end, key);
+  Key* iter_key = std::lower_bound(keys_start, keys_end, key);
   
   if (keys_end - iter_key > 1) memmove(iter_key, iter_key + 1, keys_end - iter_key - 1);
 
   PageID* childptr_start = InternalPage::GetChildrenStartPointer(page);
   PageID* childptr_end = childptr_start + page_header->num_keys + 1;
 
-  PageID* iter_child = std::binary_search(childptr_start, childptr_end, merged_page);
+  PageID* iter_child = std::find(childptr_start, childptr_end, merged_page);
 
-  if (child_ptr - iter_child > 1) memmove(iter_child, iter_child + 1, childptr_end - iter_child - 1);
+  if (childptr_end - iter_child > 1) memmove(iter_child, iter_child + 1, childptr_end - iter_child - 1);
 
   return;  
 };
@@ -215,7 +213,7 @@ bool InternalPage::CheckUnderflow(Byte* page, uint16_t &usedspace) {
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
   usedspace = usedspace + (page_header->num_keys * sizeof(Key)) + ((page_header->num_keys + 1) * sizeof(PageID));
 
-  if (usedspace <= INTERNAL_PAGE_UNDERFLOW_THRESHOLD) return true;
+  if (usedspace <= INTERNAL_UNDERFLOW_THRESHOLD) return true;
 
   return false;
 };
@@ -227,7 +225,7 @@ Result<PageID> InternalPage::GetInternalLeftSibling(Byte* page, PageID pid) {
   PageID* childptr_start = InternalPage::GetChildrenStartPointer(page);
   PageID* childptr_end = childptr_start + page_header->num_keys + 1;
 
-  PageID* iter = std::binary_search(childptr_start, childptr_end, pid);
+  PageID* iter = std::find(childptr_start, childptr_end, pid);
 
   if (iter == childptr_end) {
     return { .value = 0, .err = ErrType::ChildPtrNotFound };
@@ -246,7 +244,7 @@ Result<PageID> InternalPage::GetInternalRightSibling(Byte* page, PageID pid) {
   PageID* childptr_start = InternalPage::GetChildrenStartPointer(page);
   PageID* childptr_end = childptr_start + page_header->num_keys + 1;
 
-  PageID* iter = std::binary_search(childptr_start, childptr_end, pid);
+  PageID* iter = std::find(childptr_start, childptr_end, pid);
 
   if (iter == childptr_end) {
     return { .value = 0, .err = ErrType::ChildPtrNotFound };
@@ -259,14 +257,14 @@ Result<PageID> InternalPage::GetInternalRightSibling(Byte* page, PageID pid) {
   return { .value = *(iter + 1), .err = ErrType::None };
 };
 
+uint16_t InternalPage::CheckUsedSpace(Byte* page) {
+  InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
+  return (uint16_t)(page_header->num_keys * sizeof(Key)) + (uint16_t)((page_header->num_keys + 1) * sizeof(PageID));
+};
 
-BorrowQuery InternalPage::CanLend(PageID pid, uint16_t needed) {
+BorrowQuery InternalPage::CanLend(Byte* page, uint16_t needed) {
   
-  Result<Byte*> page_request = buffer_pool->RequestPage(pid);
-  // handle errors
-
-  Byte* page = page_request.value;
-  size_t usedspace = InternalPage::GetCurrentUsedSpace(page);
+  uint16_t usedspace = InternalPage::CheckUsedSpace(page);
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
 
   // pair: key + childptr
@@ -275,32 +273,25 @@ BorrowQuery InternalPage::CanLend(PageID pid, uint16_t needed) {
 
   size_t size_loss = one_pair_size * pairs_needed;
 
-  if ((usedspace - size_loss) <= INTERNAL_PAGE_UNDERFLOW_THRESHOLD) {
-    return { .can_borrow = false, .borrow_amount = 0, .lender = pid };
+  if ((usedspace - size_loss) <= INTERNAL_UNDERFLOW_THRESHOLD) {
+    return { .can_borrow = false, .borrow_amount = 0 };
   } else {
-    return { .can_borrow = true, .borrow_amount = pairs_needed, .lender = pid };
-  }
+    return { .can_borrow = true, .borrow_amount = (uint16_t)pairs_needed };
+  };
+  return { .can_borrow = false, .borrow_amount = 0 };
 };
 
 // 3rd element is start_ptr + 2 and not start_ptr + 3; check for this mistake below.
-void InternalPage::HandleLeftBorrow(Byte* page, PageID borrower_pid, BorrowQuery borrow_report) {
+void InternalPage::HandleLeftBorrow(Byte* page, Byte* borrower_page, Byte* lender_page, BorrowQuery borrow_report) {
 
-  Key* parent_rotation_key_ptr = InternalPage::FindKeyFromChildren(page, borrow_report.lender, borrower_pid);
-  Key parent_rotation_key = *parent_rotation_key_ptr;
+  InternalPageHeader* lender_header = reinterpret_cast<InternalPageHeader*>(lender_page);
+  InternalPageHeader* borrower_header = reinterpret_cast<InternalPageHeader*>(borrower_page);
 
-  Result<Byte*> borrower_page_request = buffer_pool->RequestPage(borrower_pid);
-  // handle errors
-  Byte* borrower_page = borrower_page_request.value;
-
-  Result<Byte*> lender_page_request = buffer_pool->RequestPage(borrow_report.lender);
-  // handle errors
-  Byte* lender_page = lender_page_request.value;
+  Key* parent_rotation_key_ptr = InternalPage::FindKeyFromChildren(page, lender_header->page_id, borrower_header->page_id);
 
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
-  InternalPageHeader* borrower_header = reinterpret_cast<InternalPageHeader*>(borrower_page);
-  InternalPageHeader* lender_header = reinterpret_cast<InternalPageHeader*>(lender_page);
 
-  Key* borrower_key_start = InternalPage::GetKeyStartPointer(borrower_page);
+  Key* borrower_key_start = InternalPage::GetKeysStartPointer(borrower_page);
   Key* borrower_key_end = borrower_key_start + borrower_header->num_keys;
   PageID* borrower_childptr_start = InternalPage::GetChildrenStartPointer(borrower_page);
   PageID* borrower_childptr_end = borrower_childptr_start + borrower_header->num_keys + 1;
@@ -311,7 +302,7 @@ void InternalPage::HandleLeftBorrow(Byte* page, PageID borrower_pid, BorrowQuery
   memmove(borrower_childptr_start + borrow_report.borrow_amount, borrower_childptr_start, (borrower_childptr_end - borrower_childptr_start) * sizeof(PageID));
 
 
-  Key* lender_key_start = InternalPage::GetKeyStartPointer(lender_page);
+  Key* lender_key_start = InternalPage::GetKeysStartPointer(lender_page);
   Key* lender_key_end = lender_key_start + borrower_header->num_keys;
   PageID* lender_childptr_start = InternalPage::GetChildrenStartPointer(lender_page);
   PageID* lender_childptr_end = lender_childptr_start + lender_header->num_keys + 1;
@@ -328,35 +319,24 @@ void InternalPage::HandleLeftBorrow(Byte* page, PageID borrower_pid, BorrowQuery
   borrower_header->num_keys += borrow_report.borrow_amount;
   lender_header->num_keys -= borrow_report.borrow_amount;
 
-  buffer_pool->ReleasePage(borrower_pid, true);
-  buffer_pool->ReleasePage(borrow_report.lender, true);
-                                              
   return;
 };
 
-void InternalPage::HandleRightBorrow(Byte* page, PageID borrower_pid, BorrowQuery borrow_report) {
-  
-  Key* parent_rotation_key_ptr = InternalPage::FindKeyFromChildren(page, borrower_pid, borrow_report.lender);
-  Key parent_rotation_key = *parent_rotation_key_ptr;
+void InternalPage::HandleRightBorrow(Byte* page, Byte* borrower_page, Byte* lender_page, BorrowQuery borrow_report) {
 
-  Result<Byte*> borrower_page_request = buffer_pool->RequestPage(borrower_pid);
-  // handle errors
-  Byte* borrower_page = borrower_page_request.value;
+  InternalPageHeader* lender_header = reinterpret_cast<InternalPageHeader*>(lender_page);
+  InternalPageHeader* borrower_header = reinterpret_cast<InternalPageHeader*>(borrower_page);
 
-  Result<Byte*> lender_page_request = buffer_pool->RequestPage(borrow_report.lender);
-  // handle errors
-  Byte* lender_page = lender_page_request.value;
+  Key* parent_rotation_key_ptr = InternalPage::FindKeyFromChildren(page, borrower_header->page_id, lender_header->page_id);
 
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
-  InternalPageHeader* borrower_header = reinterpret_cast<InternalPageHeader*>(borrower_page);
-  InternalPageHeader* lender_header = reinterpret_cast<InternalPageHeader*>(lender_page);
 
-  Key* borrower_key_start = InternalPage::GetKeyStartPointer(borrower_page);
+  Key* borrower_key_start = InternalPage::GetKeysStartPointer(borrower_page);
   Key* borrower_key_end = borrower_key_start + borrower_header->num_keys;
   PageID* borrower_childptr_start = InternalPage::GetChildrenStartPointer(borrower_page);
   PageID* borrower_childptr_end = borrower_childptr_start + borrower_header->num_keys + 1;
 
-  Key* lender_key_start = InternalPage::GetKeyStartPointer(lender_page);
+  Key* lender_key_start = InternalPage::GetKeysStartPointer(lender_page);
   Key* lender_key_end = lender_key_start + borrower_header->num_keys;
   PageID* lender_childptr_start = InternalPage::GetChildrenStartPointer(lender_page);
   PageID* lender_childptr_end = lender_childptr_start + lender_header->num_keys + 1;
@@ -369,19 +349,65 @@ void InternalPage::HandleRightBorrow(Byte* page, PageID borrower_pid, BorrowQuer
   // Move the key from parent to the end of the keys in borrower.
   memmove(borrower_key_end, parent_rotation_key_ptr, sizeof(Key));
   // Move borrow_amount - 1 keys from the start of the lender's key array to the position borrower_key_end + 1.
-  memmove(borrower_key_end+1, lender_key_start, sizeof(Key) * (borrow_result.borrow_amount - 1));
+  memmove(borrower_key_end+1, lender_key_start, sizeof(Key) * (borrow_report.borrow_amount - 1));
   // Move the lender_key_start + borrow_amount key to the parent rotation key place.
   memmove(parent_rotation_key_ptr, lender_key_start + borrow_report.borrow_amount - 1, sizeof(Key));
 
   // Shifting the keys forward in the lender
   memmove(lender_key_start, lender_key_start + borrow_report.borrow_amount, sizeof(Key) * (lender_key_end - lender_key_start - borrow_report.borrow_amount));
 
-
   borrower_header->num_keys += borrow_report.borrow_amount;
   lender_header->num_keys -= borrow_report.borrow_amount;
 
-  buffer_pool->ReleasePage(borrower_pid, true);
-  buffer_pool->ReleasePage(borrow_report.lender, true);
-                                              
   return;
+};
+
+void InternalPage::MergePages(Key partition_key, Byte* absorber_page, Byte* absorbee_page) {
+
+  InternalPageHeader* absorber_header = reinterpret_cast<InternalPageHeader*>(absorber_page);
+  InternalPageHeader* absorbee_header = reinterpret_cast<InternalPageHeader*>(absorbee_page);
+
+  Key* absorber_key_start = InternalPage::GetKeysStartPointer(absorber_page);
+  Key* absorber_key_end = absorber_key_start + absorber_header->num_keys;
+  PageID* absorber_childptr_start = InternalPage::GetChildrenStartPointer(absorber_page);
+  PageID* absorber_childptr_end = absorber_childptr_start + absorber_header->num_keys + 1;
+
+  Key* absorbee_key_start = InternalPage::GetKeysStartPointer(absorbee_page);
+  Key* absorbee_key_end = absorbee_key_start + absorbee_header->num_keys;
+  PageID* absorbee_childptr_start = InternalPage::GetChildrenStartPointer(absorbee_page);
+  PageID* absorbee_childptr_end = absorbee_childptr_start + absorbee_header->num_keys + 1;
+
+  // Place the partition_key at the end of the absorber keys arr key_end
+  memmove(absorber_key_end, &partition_key, sizeof(Key));
+  // Place all keys from absorbee at the place absorber_key_end + 1
+  memmove(absorber_key_end + 1, absorbee_key_start, sizeof(Key) * absorbee_header->num_keys);
+
+  // Place all childptr from absorbee at the place absorber_childptr_end + 1
+  memmove(absorber_childptr_end, absorbee_childptr_start, sizeof(PageID) * (absorbee_header->num_keys + 1));
+
+  absorber_header->num_keys += (absorbee_header->num_keys + 1);
+
+  return;
+};
+
+Key InternalPage::DeletePartitionKeyAndChildPtr(Byte* page, PageID left_child_pid, PageID right_child_pid) {
+
+  InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
+
+  Key* keys_start = InternalPage::GetKeysStartPointer(page);
+  Key* keys_end = keys_start + page_header->num_keys;
+  PageID* childptr_start = InternalPage::GetChildrenStartPointer(page);
+  PageID* childptr_end = childptr_start + page_header->num_keys + 1;
+
+  PageID* iter = std::find(childptr_start, childptr_end, left_child_pid);
+  memmove(iter + 1, iter + 2, (childptr_end - iter - 2) * sizeof(PageID));
+
+  OffsetIndex offset = iter - childptr_start;
+  Key partition_key;
+  memmove(&partition_key, keys_start + offset, sizeof(Key));
+  memmove(keys_start + offset, keys_start + offset + 1, sizeof(Key) * (keys_end - keys_start - offset - 1));
+
+  page_header->num_keys--;
+
+  return partition_key;
 };

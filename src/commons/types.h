@@ -14,7 +14,6 @@ using OffsetIndex = uint16_t;
 using TupleLength = uint16_t;
 using AttributeCount = uint16_t;
 using Byte = std::byte;
-using DeleteStatus = bool;
 using BitmapSize = uint16_t;
 using OperationStatus = bool;
 using Bool = uint8_t;
@@ -37,6 +36,29 @@ struct __attribute__((__packed__)) NewPage {
   PageID pid;
 };
 
+enum class PageType : uint8_t {
+    Meta = 1,
+    InternalPage = 2,
+    LeafPage = 3,
+    OverflowPage = 4,
+};
+
+struct WriteStatus {
+  uint16_t written;
+  Byte* overflow_info_store_address;
+};
+
+struct DeleteStatus {
+   bool underflown;
+   PageType page_type;
+   uint16_t current_size; // size of slot_array + tuples (for leaf page)
+};
+
+struct BorrowQuery {
+  bool can_borrow;
+  uint16_t borrow_amount;
+};
+
 enum ErrType {
 
   None,
@@ -52,14 +74,16 @@ enum ErrType {
   BufferPoolFull,
   AllPagesPinned,
   PageNotFoundInBufferPool,
+
+  ChildPtrNotFound,
+
+  RightInternalSiblingDoesNotExist, 
+  LeftInternalSiblingDoesNotExist,
+  
+  RightLeafSiblingDoesNotExist, 
+  LeftLeafSiblingDoesNotExist,
 };
 
-enum class PageType : uint8_t {
-    Meta = 1,
-    InternalPage = 2,
-    LeafPage = 3,
-    OverflowPage = 4,
-};
 
 template <typename T>
 struct Result {
