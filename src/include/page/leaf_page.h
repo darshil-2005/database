@@ -28,12 +28,11 @@
  *
  */
 
-constexpr uint16_t LEAF_PAGE_HEADER_SIZE = 13;
+constexpr uint16_t LEAF_PAGE_HEADER_SIZE = 31;
 constexpr uint16_t SLOT_SIZE = 5;
-constexpr uint16_t OVERFLOW_PAGE_HEADER_SIZE = 6;
-constexpr uint16_t OVERFLOW_PAGE_OVERFLOW_INFO_OFFSET = 3;
-constexpr uint16_t OVERFLOW_TUPLE_DATA_SIZE_MAX = 1280;
-constexpr uint16_t TUPLE_HEADER_SIZE = 7;
+constexpr uint16_t OVERFLOW_PAGE_HEADER_SIZE = 18;
+constexpr uint16_t OVERFLOW_PAGE_OVERFLOW_INFO_OFFSET = 9;
+constexpr uint16_t TUPLE_HEADER_SIZE = 13;
 constexpr uint16_t MIN_LEAF_PAGE_DATA = 128;
 
 // Page underflow if it is less than or equal to this.
@@ -144,5 +143,8 @@ namespace LeafPage {
   void MergePages(Byte* to_page, Byte* from_page);
   void DefragmentPage(Byte* page);
   Key GetPageFirstKey(Byte* page);
+
+  void DumpPage(Byte* page);
+  void DumpPageFirstLast(Byte *page);
 };
 

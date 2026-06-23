@@ -15,6 +15,7 @@ struct __attribute__((__packed__)) BufferFrameMeta {
   uint16_t pin_count = 0;
   bool is_dirty = false;
   uint8_t reference_bit = 0;
+  bool is_in_queue = false;
 };
 
 class BufferPool {

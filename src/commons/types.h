@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 
-using PageID = uint16_t;
+using PageID = uint64_t;
 using SlotID = uint16_t;
 
-using Key = uint16_t;
+using Key = uint64_t;
 using Offset = uint64_t;
 using PageOffset = uint16_t;
 using OffsetIndex = uint16_t;
@@ -18,7 +18,7 @@ using BitmapSize = uint16_t;
 using OperationStatus = bool;
 using Bool = uint8_t;
 
-using BufferSize = uint16_t;
+using BufferSize = uint64_t;
 
 struct __attribute__((__packed__)) RecordID {
   PageID pid;
@@ -37,10 +37,11 @@ struct __attribute__((__packed__)) NewPage {
 };
 
 enum class PageType : uint8_t {
-    Meta = 1,
+    MetaPage = 1,
     InternalPage = 2,
     LeafPage = 3,
     OverflowPage = 4,
+    InvalidPage = 5,
 };
 
 struct WriteStatus {

@@ -13,7 +13,7 @@ bool StorageManager::Bootstrap() {
     fd_database = open(DB_PATH, O_RDWR | O_DIRECT, S_IRUSR | S_IWUSR);
   } else {
     fd_database = open(DB_PATH, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
-    uint16_t off_start = 2;
+    uint64_t off_start = 2;
 
     Byte buffer[PAGE_SIZE];
     memcpy(buffer, &off_start, sizeof(new_page_offset_index));
@@ -39,7 +39,7 @@ bool StorageManager::Bootstrap() {
   return true;
 };
 
-uint16_t StorageManager::GetNewPageOffsetIndex() {
+uint64_t StorageManager::GetNewPageOffsetIndex() {
   return new_page_offset_index;
 };
 
@@ -50,7 +50,7 @@ void StorageManager::RefreshNewPageOffsetIndex() {
     // handle error
   };
   
-  memcpy(&new_page_offset_index, buffer, sizeof(uint16_t));
+  memcpy(&new_page_offset_index, buffer, sizeof(uint64_t));
   return;
 };
 
@@ -112,7 +112,7 @@ StorageManager::~StorageManager() {
   }
 };
 
-void StorageManager::SetNewPageOffsetIndex(uint16_t new_offset) {
+void StorageManager::SetNewPageOffsetIndex(uint64_t new_offset) {
   Byte buffer[PAGE_SIZE];
   memcpy(buffer, &new_offset, sizeof(new_page_offset_index));
   pwrite(fd_database, buffer, PAGE_SIZE, 0);
@@ -130,5 +130,5 @@ Result<PageID> StorageManager::AllocateNewPage() {
 
   StorageManager::SetNewPageOffsetIndex(new_page_offset_index + 1);
   new_page_offset_index++;
-  return { .value = (uint16_t)(new_page_offset_index - 1), .err = ErrType::None };  
+  return { .value = (PageID)(new_page_offset_index - 1), .err = ErrType::None };  
 };

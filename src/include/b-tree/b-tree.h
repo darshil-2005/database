@@ -50,7 +50,7 @@ class BTree {
 
   bool InsertTuple(Byte* buffer, BufferSize buffer_size, Key key);
   SplitReport FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, NewPage *to_write_page);
-  PayloadStream Search(PageID pid, Key key);
+  PayloadStream Search(PageID pid, Key key, bool trace_path = false);
   PageID GetRootPageID() const;
   DeleteStatus Delete(PageID pid, Key key);
 };

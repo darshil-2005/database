@@ -121,7 +121,7 @@ bool LeafPage::MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t
   page_header->right_pid = right_pid;
 
   if (slot_array_size == 0) {
-  page_header->slot_array_size = 0;
+    page_header->slot_array_size = 0;
     page_header->free_space_end_offset = PAGE_SIZE - 1;
     return true;
   };
@@ -143,6 +143,7 @@ bool LeafPage::MakePage(Byte* page, SlotArrayElement* slot_array_start, uint16_t
     memcpy(page + free_space_end_offset - length + 1, buffer + offset, length); 
     slot_array[compact_slot_array_size].offset = free_space_end_offset - length + 1;
     slot_array[compact_slot_array_size].length = length;
+    slot_array[compact_slot_array_size].is_deleted = 0;
     free_space_end_offset = slot_array[compact_slot_array_size].offset - 1;
     compact_slot_array_size++;
     i++;
@@ -192,15 +193,122 @@ SlotArrayElement* LeafPage::lower_bound(SlotArrayElement* start, SlotArrayElemen
 };
 
 Key LeafPage::GetKeyFromSlotElement(Byte* page, SlotArrayElement* element) {
-  uint16_t key;
+  Key key;
   Byte* key_address = page + element->offset + TUPLE_HEADER_SIZE;
-  memcpy(&key, key_address, sizeof(uint16_t));
+  memcpy(&key, key_address, sizeof(Key));
   return key;
 };
 
 uint32_t LeafPage::GetTupleSizeFromSlotElement(Byte* page, SlotArrayElement* element) {
   TupleHeader* tuple_header = reinterpret_cast<TupleHeader*>(page + element->offset);
   return tuple_header->size;
+};
+
+void LeafPage::DumpPageFirstLast(Byte *page) {
+  LeafPageHeader *page_header = reinterpret_cast<LeafPageHeader *>(page);
+
+  std::cout << "=============== LEAF PAGE ===============" << std::endl;
+  std::cout << "=============== LEAF PAGE HEADER ===============" << std::endl;
+  std::cout << "Page Type: " << static_cast<int>(page_header->page_type)
+            << std::endl;
+  std::cout << "Page ID: " << page_header->page_id << std::endl;
+  std::cout << "Free Space End Offset: " << page_header->free_space_end_offset
+            << std::endl;
+  std::cout << "Slot Array Size: " << page_header->slot_array_size << std::endl;
+  std::cout << "Left Sibling: " << page_header->left_pid << std::endl;
+  std::cout << "Right Sibling: " << page_header->right_pid << std::endl;
+  std::cout << "Garbage Bytes: " << page_header->garbage_bytes << std::endl;
+  std::cout << "=============== HEADER END ===============" << std::endl;
+
+  SlotArrayElement *slot_array =
+      reinterpret_cast<SlotArrayElement *>(page + LEAF_PAGE_HEADER_SIZE);
+  for (int i = 0; i < page_header->slot_array_size; i++) {
+    OverflowInfo *overflow_info =
+        reinterpret_cast<OverflowInfo *>(page + slot_array[i].offset);
+
+    if (slot_array[i].is_deleted > 0) {
+      continue;
+    } else {
+      std::cout << "=========================================" << std::endl;
+      std::cout << "Tuple Offset: " << slot_array[i].offset << std::endl;
+      std::cout << "Tuple Length: " << slot_array[i].length << std::endl;
+      std::cout << "Tuple Overflow: "
+                << static_cast<int>(overflow_info->overflow) << std::endl;
+      std::cout << "Overflow Page: " << overflow_info->overflow_page
+                << std::endl;
+      std::cout << "Key: "
+                << *reinterpret_cast<uint16_t *>(page + slot_array[i].offset +
+                                                 TUPLE_HEADER_SIZE)
+                << std::endl;
+      break;
+      std::cout << "=========================================" << std::endl;
+    };
+  };
+  for (int i = page_header->slot_array_size - 1; i>=0; i--) {
+    OverflowInfo *overflow_info =
+        reinterpret_cast<OverflowInfo *>(page + slot_array[i].offset);
+
+    if (slot_array[i].is_deleted > 0) {
+      continue;
+    } else {
+      std::cout << "=========================================" << std::endl;
+      std::cout << "Tuple Offset: " << slot_array[i].offset << std::endl;
+      std::cout << "Tuple Length: " << slot_array[i].length << std::endl;
+      std::cout << "Tuple Overflow: "
+                << static_cast<int>(overflow_info->overflow) << std::endl;
+      std::cout << "Overflow Page: " << overflow_info->overflow_page
+                << std::endl;
+      std::cout << "Key: "
+                << *reinterpret_cast<uint16_t *>(page + slot_array[i].offset +
+                                                 TUPLE_HEADER_SIZE)
+                << std::endl;
+      std::cout << "=========================================" << std::endl;
+      break;
+    };
+
+  };
+  std::cout << "=============== LEAF PAGE END ===============" << std::endl;
+};
+
+void LeafPage::DumpPage(Byte *page) {
+  LeafPageHeader *page_header = reinterpret_cast<LeafPageHeader *>(page);
+
+  std::cout << "=========================================" << std::endl;
+  std::cout << "Page Type: " << static_cast<int>(page_header->page_type)
+            << std::endl;
+  std::cout << "Page ID: " << page_header->page_id << std::endl;
+  std::cout << "Free Space End Offset: " << page_header->free_space_end_offset
+            << std::endl;
+  std::cout << "Slot Array Size: " << page_header->slot_array_size << std::endl;
+  std::cout << "Left Sibling: " << page_header->left_pid << std::endl;
+  std::cout << "Right Sibling: " << page_header->right_pid << std::endl;
+  std::cout << "Garbage Bytes: " << page_header->garbage_bytes << std::endl;
+  std::cout << "=========================================" << std::endl;
+
+  SlotArrayElement *slot_array =
+      reinterpret_cast<SlotArrayElement *>(page + LEAF_PAGE_HEADER_SIZE);
+  for (int i = 0; i < page_header->slot_array_size; i++) {
+    OverflowInfo *overflow_info =
+        reinterpret_cast<OverflowInfo *>(page + slot_array[i].offset);
+    std::cout << "=========================================" << std::endl;
+
+    if (slot_array[i].is_deleted > 0) {
+      std::cout << "ELEMENT DELETED: " << i + 1 << std::endl;
+    } else {
+      std::cout << "Tuple Offset: " << slot_array[i].offset << std::endl;
+      std::cout << "Tuple Length: " << slot_array[i].length << std::endl;
+      std::cout << "Tuple Overflow: "
+                << static_cast<int>(overflow_info->overflow) << std::endl;
+      std::cout << "Overflow Page: " << overflow_info->overflow_page
+                << std::endl;
+      std::cout << "Key: "
+                << *reinterpret_cast<uint16_t *>(page + slot_array[i].offset +
+                                                 TUPLE_HEADER_SIZE)
+                << std::endl;
+    };
+
+    std::cout << "=========================================" << std::endl;
+  };
 };
 
 SearchResult LeafPage::Search(Byte* page, Key key) {
@@ -318,9 +426,9 @@ size_t PayloadStream::NextBytes(Byte* buffer, size_t n) {
 WriteStatus LeafPage::WriteChunkLeaf(Byte* page, Byte *buffer, BufferSize buffer_size, Key key, TupleHeader* default_tuple) {
 
   // We know the minimum space is available because otherwise node would have split.
-  uint16_t data_size = std::min((uint16_t)(SLOT_SIZE + TUPLE_HEADER_SIZE + buffer_size), MAX_LEAF_PAGE_DATA);
-  uint16_t available_space = LeafPage::CheckAvailableSpace(page);
-  uint16_t total_space = available_space + LeafPage::CheckGarbageBytes(page);
+  uint32_t data_size = std::min((uint32_t)(SLOT_SIZE + TUPLE_HEADER_SIZE + buffer_size), (uint32_t)MAX_LEAF_PAGE_DATA);
+  uint32_t available_space = LeafPage::CheckAvailableSpace(page);
+  uint32_t total_space = available_space + LeafPage::CheckGarbageBytes(page);
   LeafPageHeader* page_header = reinterpret_cast<LeafPageHeader*>(page);
   
   if (data_size <= total_space) {
@@ -405,7 +513,7 @@ WriteStatus LeafPage::WriteChunkLeaf(Byte* page, Byte *buffer, BufferSize buffer
 
     page_header->free_space_end_offset = it->offset - 1;
 
-    memcpy(page + it->offset + TUPLE_HEADER_SIZE, buffer, (uint16_t)(payload_size - TUPLE_HEADER_SIZE)); 
+    memcpy(page + it->offset + TUPLE_HEADER_SIZE, buffer, (uint64_t)(payload_size - TUPLE_HEADER_SIZE)); 
     TupleHeader* th = reinterpret_cast<TupleHeader*>(page + it->offset);
     if (default_tuple == nullptr) {
       uint32_t size = static_cast<uint32_t>(buffer_size);    
@@ -633,7 +741,7 @@ Key LeafPage::GetPageFirstKey(Byte* page) {
       return LeafPage::GetKeyFromSlotElement(page, element);
     };
   };
-  return uint16_t(0);  
+  return (Key)(0);  
 };
 
 // lower_bound(SlotArrayElement* start, SlotArrayElement* end, Byte* page, Key x);

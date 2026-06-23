@@ -8,34 +8,6 @@
 
 using namespace InternalPage;
 
-void DumpPage(Byte* page) {
-
-  InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
-  std::cout << "Page Type: " << static_cast<int>(page_header->page_type) << std::endl;
-  std::cout << "Page ID: " << page_header->page_id << std::endl;
-  std::cout << "Num Keys: " << page_header->num_keys << std::endl;
-
-  std::cout << "Keys: " << std::endl;
-  uint16_t* curr = reinterpret_cast<uint16_t*>(page + INTERNAL_PAGE_HEADER_SIZE);
-
-  for (int i=0; i<page_header->num_keys; i++) {
-    std::cout << *curr << " ";
-    curr++;
-  };
-
-  std::cout<<std::endl;
-
-  std::cout << "Child Pointers: " << std::endl;
-  curr = reinterpret_cast<uint16_t*>(page + INTERNAL_PAGE_HEADER_SIZE + (KEY_SIZE * NUM_KEY_SLOTS));
-
-  for (int i=0; i<page_header->num_keys + 1; i++) {
-    std::cout << *curr << " ";
-    curr++;
-  };
-
-  std::cout<<std::endl;
-};
-
 TEST_CASE("MakePage correctly serializes internal page memory", "[page_layout]") {
     
     Byte page[4096];

@@ -62,7 +62,8 @@ Result<OffsetIndex> BufferPool::FindPageToEvict() {
     unpinned_frames.pop();
     BufferFrameMeta &frame_meta = buffer_pool_meta[index];
     if (frame_meta.pin_count > 0) {
-      continue;
+        frame_meta.is_in_queue = false; 
+        continue;
     };
     if (frame_meta.reference_bit == 1) {
       frame_meta.reference_bit = 0;
@@ -99,6 +100,7 @@ Result<OffsetIndex> BufferPool::EvictPage(OffsetIndex index) {
       .pin_count = 0,
       .is_dirty = false,
       .reference_bit = 0,
+      .is_in_queue = false,
   };
   return {.value = index, .err = ErrType::None};
 };
@@ -166,11 +168,13 @@ Result<Byte *> BufferPool::RequestPage(PageID pid) {
   buffer_pool_meta[index].page_id = pid;
   buffer_pool_meta[index].is_dirty = false;
   buffer_pool_meta[index].reference_bit = 1;
+  buffer_pool_meta[index].is_in_queue = false;
   page_table[pid] = index;
 
   return {.value = buffer_pool + offset, .err = ErrType::None};
 };
 
+// BUG: Bug here the entries in the unpinned pages can become stale
 Result<bool> BufferPool::ReleasePage(PageID pid, bool is_dirty) {
   if (!page_table.count(pid)) {
     return {.value = false, .err = ErrType::PageNotFoundInBufferPool};
@@ -179,8 +183,9 @@ Result<bool> BufferPool::ReleasePage(PageID pid, bool is_dirty) {
   OffsetIndex index = page_table[pid];
   BufferFrameMeta &frame_meta = buffer_pool_meta[index];
   frame_meta.pin_count--;
-  if (frame_meta.pin_count == 0) {
+  if (frame_meta.pin_count == 0 && !frame_meta.is_in_queue) {
     unpinned_frames.push(index);
+    frame_meta.is_in_queue = true;
   };
   frame_meta.is_dirty = frame_meta.is_dirty ? true : is_dirty;
   return {.value = true, .err = ErrType::None};

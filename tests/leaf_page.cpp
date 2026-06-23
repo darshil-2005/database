@@ -42,24 +42,24 @@ void DumpPage(Byte* page) {
   };
 };
 
-TEST_CASE("Upperbound function for inserting slot elements.", "[binary_search") {
+TEST_CASE("Upperbound function for inserting slot elements.", "[binary_search]") {
 
   Byte page[4096];
   SlotArrayElement *slots = reinterpret_cast<SlotArrayElement *>(page + LEAF_PAGE_HEADER_SIZE);
   uint8_t page_type = 3;
-  uint16_t page_id = 66;
+  PageID page_id = 66;
   uint16_t free_space_end_offset = 4095;
   uint16_t slot_array_size = 3;
   PageID prev_pid = 66;
   PageID next_pid = 66;
   PageID parent_pid = 66;
-  memcpy(page, &page_type, 1);
-  memcpy(page + 1, &page_id, 2);
-  memcpy(page + 3, &free_space_end_offset, 2);
-  memcpy(page + 5, &slot_array_size, 2);
-  memcpy(page + 7, &prev_pid, 2);
-  memcpy(page + 9, &next_pid, 2);
-  memcpy(page + 11, &parent_pid, 2);
+  memcpy(page, &page_type, sizeof(uint8_t));
+  memcpy(page + 1, &page_id, sizeof(PageID));
+  memcpy(page + 1 + 8, &free_space_end_offset, 2);
+  memcpy(page + 1 + 8 + 2, &slot_array_size, 2);
+  memcpy(page + 1 + 8 + 2 + 2, &prev_pid, sizeof(PageID));
+  memcpy(page + 1 + 8 + 2 + 2 + 8, &next_pid, sizeof(PageID));
+  memcpy(page + 1 + 8 + 2 + 2 + 8 + 8, &parent_pid, sizeof(PageID));
 
   manually_insert_tuple(page, slots, 0, 4000, 10);
   manually_insert_tuple(page, slots, 1, 3950, 20);

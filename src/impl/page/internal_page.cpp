@@ -1,6 +1,6 @@
 #include "../../include/page/internal_page.h"
 
-Bool InternalPage::CheckSlotAvailable(Byte* page, uint16_t key_size) {
+Bool InternalPage::CheckSlotAvailable(Byte* page) {
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
   if (page_header->num_keys < NUM_KEY_SLOTS) {
     return 1;
@@ -8,6 +8,34 @@ Bool InternalPage::CheckSlotAvailable(Byte* page, uint16_t key_size) {
   return 0;
 };
 
+void InternalPage::DumpPage(Byte* page) {
+
+  std::cout << "===============  INTERNAL PAGE ===============" << std::endl;
+  InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
+  std::cout << "Page Type: " << static_cast<int>(page_header->page_type) << std::endl;
+  std::cout << "Page ID: " << page_header->page_id << std::endl;
+  std::cout << "Num Keys: " << page_header->num_keys << std::endl;
+
+  std::cout << "Keys: " << std::endl;
+  uint64_t* curr = reinterpret_cast<uint64_t*>(page + INTERNAL_PAGE_HEADER_SIZE);
+
+  for (int i=0; i<page_header->num_keys; i++) {
+    std::cout << *curr << " ";
+    curr++;
+  };
+
+  std::cout<<std::endl;
+
+  std::cout << "Child Pointers: " << std::endl;
+  curr = reinterpret_cast<uint64_t*>(page + INTERNAL_PAGE_HEADER_SIZE + (KEY_SIZE * NUM_KEY_SLOTS));
+
+  for (int i=0; i<page_header->num_keys + 1; i++) {
+    std::cout << *curr << " ";
+    curr++;
+  };
+
+  std::cout << "\n=============== END ===============" << std::endl;
+};
 Key* InternalPage::GetKeysStartPointer(Byte* page){
   return reinterpret_cast<Key*>(page + INTERNAL_PAGE_HEADER_SIZE);
 };
@@ -60,7 +88,7 @@ Bool InternalPage::InsertKeyValue(Byte* page, Key boundary_key, PageID new_pid) 
   return 1;
 };
 
-uint16_t InternalPage::HandleSplit(Byte* old_page, Byte* new_page, Key key_to_insert, PageID page_id_to_insert) {
+Key InternalPage::HandleSplit(Byte* old_page, Byte* new_page, Key key_to_insert, PageID page_id_to_insert) {
 
   Key temp_keys[NUM_KEY_SLOTS + 1];
   PageID temp_ptrs[NUM_CHILD_PAGEID_SLOTS + 1];
@@ -89,7 +117,7 @@ uint16_t InternalPage::HandleSplit(Byte* old_page, Byte* new_page, Key key_to_in
 
   *insertion_it = page_id_to_insert;
 
-  uint16_t new_keys_length = page_header->num_keys + 1; 
+  uint64_t new_keys_length = page_header->num_keys + 1; 
 
   Key* boundary_key = temp_keys + (new_keys_length / 2);
   InternalPage::MakePage(old_page, temp_keys, temp_ptrs, (new_keys_length / 2), page_header->page_id);
@@ -106,16 +134,16 @@ Bool InternalPage::MakePage(Byte* page, Key* keys_ptr, PageID* children_ptr, uin
 
   curr = curr + sizeof(PageType::InternalPage);
   // correction
-  memcpy(curr, &pid, sizeof(pid));
+  memcpy(curr, &pid, sizeof(PageID));
 
-  curr = curr + sizeof(pid);
-  memcpy(curr, &keys_to_take, sizeof(keys_to_take)); 
+  curr = curr + sizeof(PageID);
+  memcpy(curr, &keys_to_take, sizeof(uint16_t)); 
 
-  curr = curr + sizeof(keys_to_take);
-  memcpy(curr, keys_ptr, (keys_to_take * sizeof(*keys_ptr)));
+  curr = curr + sizeof(uint16_t);
+  memcpy(curr, keys_ptr, (keys_to_take * sizeof(Key*)));
 
-  curr = curr + sizeof(*keys_ptr) * NUM_KEY_SLOTS;
-  memcpy(curr, children_ptr, sizeof(*children_ptr) * (keys_to_take + 1));
+  curr = curr + sizeof(Key*) * NUM_KEY_SLOTS;
+  memcpy(curr, children_ptr, sizeof(PageID) * (keys_to_take + 1));
 
   InternalPageHeader* ph = reinterpret_cast<InternalPageHeader*>(page);
   
@@ -184,6 +212,8 @@ void InternalPage::SetNewBoundaryKey(Byte* page, Key new_boundary_key, PageID le
 void InternalPage::DeleteKeyAndChildPtr(Byte* page, PageID merged_page, PageID absorbing_page) {
 
   InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
+
+  page_header->num_keys--;
 
   Key* key_ptr;
   key_ptr = InternalPage::FindKeyFromChildren(page, absorbing_page, merged_page);
@@ -278,7 +308,7 @@ BorrowQuery InternalPage::CanLend(Byte* page, uint16_t needed) {
   } else {
     return { .can_borrow = true, .borrow_amount = (uint16_t)pairs_needed };
   };
-  return { .can_borrow = false, .borrow_amount = 0 };
+    return { .can_borrow = false, .borrow_amount = 0 };
 };
 
 // 3rd element is start_ptr + 2 and not start_ptr + 3; check for this mistake below.

@@ -6,11 +6,11 @@
 #include <algorithm>
 #include <iostream>
 
-constexpr uint16_t INTERNAL_PAGE_HEADER_SIZE = 5;
-constexpr uint16_t NUM_KEY_SLOTS = 1022;
-constexpr uint16_t NUM_CHILD_PAGEID_SLOTS = 1023;
-constexpr uint16_t KEY_SIZE = 2;
-constexpr uint16_t CHILD_PTR_SIZE = 2;
+constexpr uint16_t INTERNAL_PAGE_HEADER_SIZE = 11;
+constexpr uint16_t NUM_KEY_SLOTS = 254;
+constexpr uint16_t NUM_CHILD_PAGEID_SLOTS = 255;
+constexpr uint16_t KEY_SIZE = 8;
+constexpr uint16_t CHILD_PTR_SIZE = 8;
 
 // this is defined in data_size as well and not count
 constexpr uint16_t INTERNAL_UNDERFLOW_THRESHOLD = ((PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / 2) - KEY_SIZE - CHILD_PTR_SIZE;
@@ -30,12 +30,12 @@ namespace InternalPage {
   PageID GetChildPageID(Byte* page, Key key);
 
   uint16_t CheckUsedSpace(Byte* page);
-  Bool CheckSlotAvailable(Byte* page, uint16_t key_size);
+  Bool CheckSlotAvailable(Byte* page);
   Key* GetKeysStartPointer(Byte* page);
   PageID* GetChildrenStartPointer(Byte* page);
   PageID GetValueAtIndex(Byte* page, OffsetIndex index);
   // Splits the keys in 
-  uint16_t HandleSplit(Byte* old_page, Byte* new_page, Key key_to_insert, PageID page_id_to_insert);
+  Key HandleSplit(Byte* old_page, Byte* new_page, Key key_to_insert, PageID page_id_to_insert);
   Bool InsertKeyValue(Byte* page, Key boundary_key, PageID new_pid);
   Bool MakePage(Byte* page, Key* keys_ptr, PageID* children_ptr, uint16_t keys_to_take, PageID pid); 
   Key* FindKeyFromChildren(Byte* page, PageID left_pid, PageID right_pid);
@@ -57,4 +57,6 @@ namespace InternalPage {
 
   Key DeletePartitionKeyAndChildPtr(Byte* page, PageID left_child_pid, PageID right_child_pid);
   void MergePages(Key partition_key, Byte* absorber_page, Byte* absorbee_page);
+
+  void DumpPage(Byte* page);
 };

@@ -3,6 +3,7 @@
 // b-tree only talks to buffer pool so buffer pool need to allocate fresh page
 // and also need to deal with freshly freed page.
 
+
 BTree::BTree(BufferPool &bf, PageID root_id) { 
   this->buffer_pool = &bf;
 
@@ -31,11 +32,21 @@ bool BTree::InsertTuple(Byte *buffer, BufferSize buffer_size, Key key) {
   if (report.was_split) {
     Result<NewPage> new_root_result = buffer_pool->AllocateNewPage();
     // handle error
+
+    std::cout << new_root_result.value.pid << std::endl;
+    
     PageID new_root_id = new_root_result.value.pid;
     Key keys_ptr[1] = { report.boundary_key };
     PageID children_ptr[2] = { root_page_id, report.new_page_id };
     InternalPage::MakePage(new_root_result.value.ptr, keys_ptr, children_ptr, 1, new_root_id);
     root_page_id = new_root_id;
+
+    /*
+    std::cout << "\n\n========== New Root Dumped Start ==========" << std::endl;
+    InternalPage::DumpPage(new_root_result.value.ptr);
+    std::cout << "========== New Root Dumped End ==========\n\n" << std::endl;
+    */
+
     buffer_pool->ReleasePage(root_page_id, true);
   };
 
@@ -58,7 +69,6 @@ bool BTree::InsertTuple(Byte *buffer, BufferSize buffer_size, Key key) {
     overflow_info->overflow_page = new_page.pid;
 
     buffer_pool->ReleasePage(to_write_page.pid, true);
-
     write_status = LeafPage::WriteChunkOverflow(new_page.ptr, buffer, buffer_size);
 
     buffer = buffer + write_status.written;
@@ -101,7 +111,20 @@ SplitReport BTree::FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, 
 
     // The returns the lowest key of the new page to us as boundary key.
     // new_page gets the bigger half of the entries
-    uint16_t boundary_key = LeafPage::HandleSplit(page, new_page.ptr, new_page.pid);
+    uint64_t boundary_key = LeafPage::HandleSplit(page, new_page.ptr, new_page.pid);
+    
+    std::cout << "Leaf Split: " << pid << ", " << new_page.pid << std::endl;
+    /*
+    std::cout << "\n\n========== Leaf Page Split START ===========" << std::endl;
+    std::cout << "Leaf Split: " << pid << ", " << new_page.pid << std::endl;
+    LeafPage::DumpPageFirstLast(page);
+
+    std::cout << "\n\n" << std::endl;
+
+    LeafPage::DumpPageFirstLast(new_page.ptr);
+    std::cout << "========== Leaf Page Split END ===========\n\n" << std::endl;
+    */
+
 
     if (key >= boundary_key) {
       *to_write_page = new_page;
@@ -130,7 +153,7 @@ SplitReport BTree::FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, 
       InternalPageHeader *internal_page_header =
           reinterpret_cast<InternalPageHeader *>(page);
       // hard coded for now will change if there is variable sized keys.
-      Bool slot_available = InternalPage::CheckSlotAvailable(page, KEY_SIZE);
+      Bool slot_available = InternalPage::CheckSlotAvailable(page);
 
       if (slot_available > 0) {
         Bool result = InternalPage::InsertKeyValue(page, report.boundary_key,
@@ -146,8 +169,21 @@ SplitReport BTree::FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, 
         // handle errors here
         NewPage new_page = new_page_result.value;
 
-        uint16_t boundary_key = InternalPage::HandleSplit(
+        uint64_t boundary_key = InternalPage::HandleSplit(
             page, new_page.ptr, report.boundary_key, report.new_page_id);
+
+        /*
+        std::cout << "\n\n========== Internal Page Split START ===========" << std::endl;
+        std::cout << "Internal Split: " << pid << ", " << new_page.pid << std::endl;
+        std::cout << "Boundary Key: " << boundary_key << std::endl;
+        InternalPage::DumpPage(page);
+
+        std::cout << "\n" << std::endl;
+
+        InternalPage::DumpPage(new_page.ptr);
+        std::cout << "========== Internal Page Split END ===========\n\n" << std::endl;
+        */
+
         buffer_pool->ReleasePage(pid, true);
         buffer_pool->ReleasePage(new_page.pid, true);
 
@@ -160,7 +196,7 @@ SplitReport BTree::FindPageToWrite(PageID pid, Key key, BufferSize buffer_size, 
   };
 };
 
-PayloadStream BTree::Search(PageID pid, Key key) {
+PayloadStream BTree::Search(PageID pid, Key key, bool trace_path) {
 
   Result<Byte*> request_page_response = buffer_pool->RequestPage(pid);
   // Handle errors
@@ -169,12 +205,23 @@ PayloadStream BTree::Search(PageID pid, Key key) {
   PageHeader* general_page_header = reinterpret_cast<PageHeader*>(page);
 
   if (general_page_header->page_type == PageType::InternalPage) {
-    
+
+    if (trace_path) {
+      std::cout << pid << std::endl;
+      InternalPage::DumpPage(page);
+    };
+
     PageID child_pid = InternalPage::GetChildPageID(page, key);
+
     buffer_pool->ReleasePage(pid, false);
-    return BTree::Search(child_pid, key);
+    return BTree::Search(child_pid, key, trace_path);
 
   } else if (general_page_header->page_type == PageType::LeafPage) {
+
+    if (trace_path) {
+      std::cout << pid << std::endl;
+      LeafPage::DumpPage(page);
+    };
 
     SearchResult result = LeafPage::Search(page, key);
 
@@ -240,6 +287,12 @@ DeleteStatus BTree::Delete(PageID pid, Key key) {
             // handle errors
             Byte* child_page = child_page_request.value;
 
+            /*
+            std::cout << "Borrowing From Left: " << std::endl;
+            std::cout << "Borrower: " << child_pid << std::endl;
+            std::cout << "Lender: " << left_pid_check.value << std::endl;
+            */
+
             Key new_boundary_key = LeafPage::HandleLeftBorrow(child_page, lender_page, borrow_query_report);
             // Set new value for the key that separates lender | child_pid
             InternalPage::SetNewBoundaryKey(page, new_boundary_key, left_pid_check.value, child_pid);
@@ -270,6 +323,12 @@ DeleteStatus BTree::Delete(PageID pid, Key key) {
             // handle errors
             Byte* child_page = child_page_request.value;
 
+            /*
+            std::cout << "Borrowing From Right: " << std::endl;
+            std::cout << "Borrower: " << child_pid << std::endl;
+            std::cout << "Lender: " << right_pid_check.value << std::endl;
+            */
+
             Key new_boundary_key = LeafPage::HandleRightBorrow(child_page, lender_page, borrow_query_report);
             InternalPage::SetNewBoundaryKey(page, new_boundary_key, child_pid, right_pid_check.value);
 
@@ -296,6 +355,29 @@ DeleteStatus BTree::Delete(PageID pid, Key key) {
           LeafPage::MergePages(to_page, from_page);
           InternalPage::DeleteKeyAndChildPtr(page, child_pid, left_pid_check.value);
 
+          InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
+          if (page_header->page_id == root_page_id && page_header->num_keys == 0) {
+            PageID* child_ptr = InternalPage::GetChildrenStartPointer(page);
+            root_page_id = *child_ptr;
+            // release the current page completely
+            buffer_pool->ReleasePage(pid, false);
+            buffer_pool->ReleasePage(child_pid, false);
+            buffer_pool->ReleasePage(left_pid_check.value, true);
+            return { .underflown = false, .page_type = PageType::InvalidPage, .current_size = 0 };
+          };
+
+
+          /*
+          InternalPage::DumpPage(page);
+
+          std::cout << "===================================================================" << std::endl;
+          std::cout << "Merge with Left: " << std::endl;
+          std::cout << "Current Page: " << pid << std::endl;
+          std::cout << "Left Page: " << left_pid_check.value << std::endl;
+          std::cout << "Right Page: " << child_pid << std::endl;
+          std::cout << "===================================================================" << std::endl;
+          */
+
           uint16_t usedspace;
           bool underflow_happened = InternalPage::CheckUnderflow(page, usedspace);
 
@@ -316,8 +398,36 @@ DeleteStatus BTree::Delete(PageID pid, Key key) {
           // handle errors
           Byte* from_page = from_page_request.value;
 
+          InternalPage::DumpPage(page);
+
+
+          std::cout << "===============================================================" << std::endl;
+          LeafPage::DumpPage(to_page);
+          std::cout << "===============================================================" << std::endl;
+          std::cout << "===============================================================" << std::endl;
+          LeafPage::DumpPageFirstLast(from_page);
+          std::cout << "===============================================================" << std::endl;
           LeafPage::MergePages(to_page, from_page);
           InternalPage::DeleteKeyAndChildPtr(page, right_pid_check.value, child_pid);
+
+          InternalPageHeader* page_header = reinterpret_cast<InternalPageHeader*>(page);
+          if (page_header->page_id == root_page_id && page_header->num_keys == 0) {
+            PageID* child_ptr = InternalPage::GetChildrenStartPointer(page);
+            root_page_id = *child_ptr;
+            // release the current page completely
+            buffer_pool->ReleasePage(pid, false);
+            buffer_pool->ReleasePage(child_pid, false);
+            buffer_pool->ReleasePage(left_pid_check.value, true);
+            return { .underflown = false, .page_type = PageType::InvalidPage, .current_size = 0 };
+          };
+
+          InternalPage::DumpPage(page);
+          std::cout << "===================================================================" << std::endl;
+          std::cout << "Merge with Right: " << std::endl;
+          std::cout << "Current Page: " << pid << std::endl;
+          std::cout << "Left Page: " << child_pid << std::endl;
+          std::cout << "Right Page: " << right_pid_check.value << std::endl;
+          std::cout << "===================================================================" << std::endl;
 
           uint16_t usedspace;
           bool underflow_happened = InternalPage::CheckUnderflow(page, usedspace);
@@ -352,6 +462,7 @@ DeleteStatus BTree::Delete(PageID pid, Key key) {
             Byte* child_page = child_page_request.value;
 
             InternalPage::HandleLeftBorrow(page, child_page, lender_page, borrow_query_report);
+
             buffer_pool->ReleasePage(left_pid_check.value, true);
             buffer_pool->ReleasePage(child_pid, true);
             buffer_pool->ReleasePage(pid, true);

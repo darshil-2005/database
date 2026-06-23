@@ -22,14 +22,14 @@ class StorageManager {
   */
   private:
   void RefreshNewPageOffsetIndex();
-  void SetNewPageOffsetIndex(uint16_t new_offset);
-  uint16_t new_page_offset_index;
+  void SetNewPageOffsetIndex(uint64_t new_offset);
+  uint64_t new_page_offset_index;
   int fd_database;
   int fd_logs;
   public:
   bool Bootstrap();
   ~StorageManager();
-  uint16_t GetNewPageOffsetIndex();
+  uint64_t GetNewPageOffsetIndex();
   Result<bool> ReadPage(PageID pid, Byte* buffer);
   Result<bool> WritePage(PageID pid, const Byte* buffer);
   Result<PageID> AllocateNewPage();
