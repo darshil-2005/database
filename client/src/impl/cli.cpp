@@ -50,10 +50,11 @@ void CLI::UseCLI(Client &client) {
         std::cout << "Status Code: " << static_cast<int>(query_response.header.status_code) << std::endl;
         if (query_response.header.status_code == 1) {
           std::vector<std::string> parsed_payload = CLI::ParseResponsePayload(query_response.payload);
-          std::cout << "===== RESPONSE ======" << std::endl;
+          std::cout << "======= RESPONSE ========" << std::endl;
           for (size_t i=1; i<=parsed_payload.size(); i++) {
             std::cout << i << ": " << parsed_payload[i-1] << std::endl;
           };
+          std::cout << "=========================\n\n";
         } else {
           std::cout << "Query failed!" << std::endl;
         }

@@ -1,25 +1,25 @@
-# DBMS Engine
+# Datashil
 
-A lightweight database management system built in C++17. The project is split into a storage engine, a TCP server, and a CLI client that can search, insert, and delete key/value records backed by a B-tree.
+Datashil is a lightweight, disk-based database engine written in modern C++. It implements a persistent B+ tree storage engine, a custom binary client/server protocol over TCP, and an interactive CLI for executing basic database operations. The project is designed to explore the core components of a database system, including storage management, indexing, buffering, and networking.
 
 ## Features
 
-- B-tree based storage engine with persistence
-- Buffer pool and page management layer
-- TCP server for query execution
-- Interactive CLI client
-- Catch2-based test suite with generated datasets
+- Persistent disk-backed B+ tree index
+- Slotted-page storage format with page defragmentation
+- Buffer pool for cached page management
+- TCP client/server architecture with a custom binary protocol
+- Interactive CLI supporting insert, search, and delete operations
+- Comprehensive Catch2 test suite covering persistence, insertion, search, deletion, and stress testing
 
 ## Repository Layout
 
 - `commons/` shared types, constants, and utilities
 - `database/` storage engine, server, and tests
-- `client/` interactive command-line client
-- `build/` generated object files
+- `client/` tcp client for server interaction with a simple cli for demonstration
 
 ## Prerequisites
 
-- `g++` with C++17 support
+- `g++` with C++17 and above supported
 - `make`
 - Python 3 for generating test data
 
@@ -50,11 +50,13 @@ Start the database server with a path to the database file or directory:
 ./server_app <database_path> [port]
 ```
 
-The current implementation accepts an optional port argument, but the server starts on port `8080`.
+The database file is formed along with all its parent folders if needed.
 
 ## Run the Client
 
-Connect the client to the server with a host and port:
+The client includes a simple interactive CLI for demonstration purposes.
+
+Connect the client-CLI to the server with a host and port:
 
 ```bash
 ./client_app <host> <port>
@@ -64,7 +66,8 @@ Once connected, enter commands at the `datashil>` prompt.
 
 ### Supported Commands
 
-Commands are terminated with a semicolon and use a simple grammar:
+- A simple parser is implemented to parse the queries.
+- Commands are terminated with a semicolon and use a simple grammar.
 
 ```text
 search <key>;
@@ -74,11 +77,7 @@ delete <key>;
 
 Example session:
 
-```text
-datashil> insert 42 "hello world";
-datashil> search 42;
-datashil> delete 42;
-```
+![alt text](static/demonstration.png)
 
 ## Tests
 
@@ -89,10 +88,21 @@ make generate_data
 make test
 ```
 
-The test suite exercises B-tree insert, search, delete, persistence, and defragmentation behavior.
+The test suite covers:
+
+- B+ tree insertion
+- Search
+- Deletion
+- Persistence
+- Page defragmentation
+
+Stress tests include:
+
+- Up to 60,000 inserted records
+- Payloads up to 10,000 bytes
+- 30,000 deletions using multiple deletion patterns
 
 ## Notes
 
-- Test data is stored under `database/tests/data/`.
-- The database engine uses binary client/server messages with checksum validation.
-- If you change the on-disk format or protocol, update the tests and this README together.
+- Test data is stored in `database/tests/data/`.
+- Communication between the client and server uses a custom binary protocol with checksum validation.
