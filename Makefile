@@ -37,6 +37,13 @@ $(CLIENT_BIN) : $(CLIENT_OBJS)
 	@echo "Linking Client..."
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
+generate_data:
+	@echo "Generating data for testing..." && \
+	cd database/tests/data && \
+	python data_generation.py && \
+	python data_generation_small.py && \
+	python data_generation_jumbled.py
+
 test: $(TEST_BIN)
 	@echo "Running tests..."
 	@cd database/tests && ./run_tests.sh
