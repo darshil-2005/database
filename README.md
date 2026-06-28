@@ -75,9 +75,8 @@ insert <key> "<payload>";
 delete <key>;
 ```
 
-Example session:
-
-![alt text](static/demonstration.png)
+**Example session:**
+<img src="static/demonstration.png" width="500">
 
 ## Tests
 
