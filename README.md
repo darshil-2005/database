@@ -1,5 +1,7 @@
 # Datashil
 
+---
+
 A lightweight, disk-based database engine written in modern C++. The project was built to explore the design and implementation of database storage systems from first principles, with a focus on building a persistent index and the infrastructure required to manage data reliably on disk. It includes a custom storage engine, a TCP server, and a simple CLI for interacting with the database.
 
 **For architectural deatils refer to [architectural file](/Architecture.md).** 
